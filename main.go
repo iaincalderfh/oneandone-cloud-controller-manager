@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/golang/glog"
 	utilflag "k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/apiserver/pkg/util/logs"
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
@@ -16,6 +17,9 @@ import (
 	"github.com/spf13/pflag"
 	_ "github.com/iaincalderfh/oneandone-cloud-controller-manager/pkg/oneandone"
 )
+
+var version string
+var build string
 
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -30,6 +34,8 @@ func main() {
 	// utilflag.InitFlags()
 	logs.InitLogs()
 	defer logs.FlushLogs()
+
+	glog.V(1).Infof("oneandone-cloud-controller-manager version: %s (%s)", version, build)
 
 	if err := command.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

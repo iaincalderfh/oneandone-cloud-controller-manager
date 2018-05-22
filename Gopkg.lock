@@ -8,6 +8,12 @@
   revision = "75cd24fc2f2c2a2088577d12123ddee5f54e0675"
 
 [[projects]]
+  name = "github.com/1and1/oneandone-cloudserver-sdk-go"
+  packages = ["."]
+  revision = "d32eb53f7e4af6157823934b18d69b42371efc43"
+  version = "v1.3.4"
+
+[[projects]]
   name = "github.com/NYTimes/gziphandler"
   packages = ["."]
   revision = "2600fb119af974220d3916a5916d6e31176aac1b"
@@ -878,6 +884,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a2eb3552fcc33c89c2c5c57cb57cfe2078cd9b668ab9556bc629fa3876168624"
+  inputs-digest = "602b7da50aaa8f1fb00fc33f57528b521ef2661e051d4117b5ffacb85451f2d7"
   solver-name = "gps-cdcl"
   solver-version = 1
