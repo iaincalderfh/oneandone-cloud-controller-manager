@@ -14,7 +14,7 @@ import (
 	_ "k8s.io/kubernetes/pkg/version/prometheus"        // for version metric registration
 
 	"github.com/spf13/pflag"
-	_ "fasthosts.com/claas/oneandone-cloud-controller-manager/pkg/oneandone"
+	_ "github.com/iaincalderfh/oneandone-cloud-controller-manager/pkg/oneandone"
 )
 
 func main() {
