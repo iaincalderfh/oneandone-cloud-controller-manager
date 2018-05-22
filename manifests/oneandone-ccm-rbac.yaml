@@ -34,9 +34,10 @@ spec:
       - image: iaincalderfh/oneandone-cloud-controller-manager:latest
         name: oneandone-cloud-controller-manager
         command:
-          - "/bin/oneandonecloud-controller-manager"
+          - "/bin/oneandone-cloud-controller-manager"
           - "--cloud-provider=oneandone"
           - "--leader-elect=false"
+          - "--allow-untagged-cloud"
         resources:
           requests:
             cpu: 100m

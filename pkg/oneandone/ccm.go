@@ -14,7 +14,7 @@ const (
 
 func init() {
 	cloudprovider.RegisterCloudProvider("oneandone", func(config io.Reader) (cloudprovider.Interface, error) {
-		return &CloudProvider{}, nil
+		return &CloudProvider{lb: &loadBalancer{}}, nil
 	})
 }
 
