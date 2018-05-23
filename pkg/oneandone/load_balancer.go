@@ -3,10 +3,10 @@ package oneandone
 import (
 	"context"
 
+	"github.com/1and1/oneandone-cloudserver-sdk-go"
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
-	"github.com/1and1/oneandone-cloudserver-sdk-go"
 )
 
 const (
@@ -33,9 +33,6 @@ const (
 	lbStatusActive  = "ACTIVE"
 	lbStatusErrored = "errored"
 )
-
-// Compile-time check that loadBalancer implements cloudprovider.LoadBalancer
-var _ cloudprovider.LoadBalancer = &loadBalancer{}
 
 type loadBalancer struct {
 	client            *oneandone.API
