@@ -254,6 +254,11 @@ func (lb *loadBalancer) buildLoadBalancerRequest(service *v1.Service, nodes []*v
 		return nil, err
 	}
 
+	regionId, err := lb.getIdForRegion(lb.region)
+	if err != nil {
+		return nil, err
+	}
+
 	healthCheck := buildHealthCheck(service)
 
 	return &oneandone.LoadBalancerRequest{
@@ -262,10 +267,25 @@ func (lb *loadBalancer) buildLoadBalancerRequest(service *v1.Service, nodes []*v
 		HealthCheckInterval:	&healthCheck.CheckInterval,
 		Persistence:			&healthCheck.Persistence,
 		PersistenceTime:		&healthCheck.PersistenceTime,
-		DatacenterId:			lb.region,
+		DatacenterId:			regionId,
 		Method:					algorithm,
 		Rules:					forwardingRules,
 	}, nil
+}
+
+func (lb *loadBalancer) getIdForRegion(regionCode string) (string, error) {
+	dcs, err := lb.client.ListDatacenters()
+	if err != nil {
+		return "", err
+	}
+
+	for _, dc := range dcs {
+		if dc.CountryCode == regionCode {
+			return dc.Id, nil
+		}
+	}
+
+	return "", fmt.Errorf("getIdForRegion: Cloud not find dataceenter with country_code: %s", regionCode)
 }
 
 // buildHealthCheck returns a *HealthCheck helper object which is used for loadbalancer
