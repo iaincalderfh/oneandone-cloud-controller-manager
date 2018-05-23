@@ -87,5 +87,7 @@ _testmain.go
 debug
 debug~
 
+
 oneandone-cloud-controller-manager
 notes.txt
+manifests/cloud-provider\.yaml
