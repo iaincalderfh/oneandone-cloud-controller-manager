@@ -1,5 +1,10 @@
 # NOTE: this release is only compatible with Kubernetes versions >=v1.10
-
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloud-controller-manager
+  namespace: kube-system
 ---
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -38,6 +43,11 @@ spec:
           - "--cloud-provider=oneandone"
           - "--leader-elect=false"
           - "--allow-untagged-cloud"
+          - "--cloud-config=/etc/oneandone/cloud-provider.yaml"
+        volumeMounts:
+          - name: cfg
+            mountPath: /etc/oneandone
+            readOnly: true
         resources:
           requests:
             cpu: 100m
@@ -48,4 +58,8 @@ spec:
               secretKeyRef:
                 name: oneandone
                 key: token
+      volumes:
+        - name: cfg
+          secret:
+            secretName: oneandone-cloud-controller-manager
 

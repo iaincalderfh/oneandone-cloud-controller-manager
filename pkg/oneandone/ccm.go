@@ -3,24 +3,29 @@ package oneandone
 import (
 	"io"
 
+	"fmt"
+	"os"
+
+	"github.com/1and1/oneandone-cloudserver-sdk-go"
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
-	"github.com/1and1/oneandone-cloudserver-sdk-go"
-	"os"
-	"fmt"
 )
 
 const (
-	oneAPITokenEnv  = "ONE_API_TOKEN"
+	oneAPITokenEnv       = "ONE_API_TOKEN"
 	oneOverrideAPIURLEnv = "ONE_OVERRIDE_URL"
 	oneInstanceReqionEnv = "ONE_INSTANCE_REGION"
-	ProviderName = "oneandone"
+	ProviderName         = "oneandone"
 )
 
 func init() {
 	cloudprovider.RegisterCloudProvider("oneandone", func(config io.Reader) (cloudprovider.Interface, error) {
-		return newCloudProvider(config)
+		cfg, err := ReadConfig(config)
+		if err != nil {
+			return nil, err
+		}
+		return newCloudProvider(cfg)
 	})
 }
 
@@ -28,11 +33,11 @@ func init() {
 var _ cloudprovider.Interface = &CloudProvider{}
 
 type CloudProvider struct {
-	client        *oneandone.API
+	client       *oneandone.API
 	loadbalancer cloudprovider.LoadBalancer
 }
 
-func newCloudProvider(config io.Reader) (cloudprovider.Interface, error) {
+func newCloudProvider(config *Config) (cloudprovider.Interface, error) {
 	token := oneandone.SetToken(os.Getenv(oneAPITokenEnv))
 	if token == "" {
 		return nil, fmt.Errorf("environment variable %q is required", oneAPITokenEnv)
@@ -54,7 +59,7 @@ func newCloudProvider(config io.Reader) (cloudprovider.Interface, error) {
 	}
 
 	return &CloudProvider{
-		client: apiClient,
+		client:       apiClient,
 		loadbalancer: newLoadbalancer(apiClient, region),
 	}, nil
 }

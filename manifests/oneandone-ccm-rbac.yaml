@@ -1,60 +1,4 @@
 # NOTE: this release is only compatible with Kubernetes versions >=v1.10
-
----
-apiVersion: extensions/v1beta1
-kind: Deployment
-metadata:
-  name: oneandone-cloud-controller-manager
-  namespace: kube-system
-spec:
-  replicas: 1
-  revisionHistoryLimit: 2
-  template:
-    metadata:
-      labels:
-        app: oneandone-cloud-controller-manager
-      annotations:
-        scheduler.alpha.kubernetes.io/critical-pod: ''
-    spec:
-      dnsPolicy: Default
-      hostNetwork: true
-      serviceAccountName: cloud-controller-manager
-      tolerations:
-        # this taint is set by all kubelets running `--cloud-provider=external`
-        # so we should tolerate it to schedule our ccm
-        - key: "node.cloudprovider.kubernetes.io/uninitialized"
-          value: "true"
-          effect: "NoSchedule"
-        - key: "CriticalAddonsOnly"
-          operator: "Exists"
-        # cloud controller managers should be able to run on masters
-        - key: "node-role.kubernetes.io/master"
-          effect: NoSchedule
-      containers:
-      - image: iaincalderfh/oneandone-cloud-controller-manager:latest
-        name: oneandone-cloud-controller-manager
-        command:
-          - "/bin/oneandone-cloud-controller-manager"
-          - "--cloud-provider=oneandone"
-          - "--leader-elect=false"
-          - "--allow-untagged-cloud"
-        resources:
-          requests:
-            cpu: 100m
-            memory: 50Mi
-        env:
-          - name: NGCS_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: oneandone
-                key: token
-
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: cloud-controller-manager
-  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -117,6 +61,16 @@ rules:
   - list
   - watch
   - update
+
+# For PV labelling
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumes
+  verbs:
+  - list
+  - watch
+- patch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
