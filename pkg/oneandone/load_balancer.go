@@ -3,7 +3,6 @@ package oneandone
 import (
 	"context"
 
-	"github.com/1and1/oneandone-cloudserver-sdk-go"
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
