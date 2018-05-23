@@ -1,0 +1,6 @@
+.git
+.dockerignore
+Gopkg.lock
+Gopkg.toml
+oneandone-cloud-controller-manager
+README.md
