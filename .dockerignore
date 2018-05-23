@@ -1,6 +1,10 @@
 .git
+.gitignore
+.idea
 .dockerignore
 Gopkg.lock
 Gopkg.toml
 oneandone-cloud-controller-manager
+Dockerfile
+manifests
 README.md

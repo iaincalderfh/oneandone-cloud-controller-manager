@@ -15,7 +15,7 @@ import (
 const (
 	oneAPITokenEnv       = "ONE_API_TOKEN"
 	oneOverrideAPIURLEnv = "ONE_OVERRIDE_URL"
-	oneInstanceReqionEnv = "ONE_INSTANCE_REGION"
+	oneInstanceRegionEnv = "ONE_INSTANCE_REGION"
 	ProviderName         = "oneandone"
 )
 
@@ -53,9 +53,9 @@ func newCloudProvider(config *Config) (cloudprovider.Interface, error) {
 		return nil, fmt.Errorf("failed to create oneandone api client")
 	}
 
-	region := os.Getenv(oneInstanceReqionEnv)
+	region := os.Getenv(oneInstanceRegionEnv)
 	if region == "" {
-		return nil, fmt.Errorf("environment variable %q is required", oneInstanceReqionEnv)
+		return nil, fmt.Errorf("environment variable %q is required", oneInstanceRegionEnv)
 	}
 
 	return &CloudProvider{

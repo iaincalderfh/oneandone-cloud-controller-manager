@@ -53,7 +53,12 @@ spec:
             cpu: 100m
             memory: 50Mi
         env:
-          - name: NGCS_TOKEN
+          - name: ONE_INSTANCE_REGION
+            valueFrom:
+              secretKeyRef:
+                name: oneandone
+                key: credentials-datacenter
+          - name: ONE_API_TOKEN
             valueFrom:
               secretKeyRef:
                 name: oneandone
