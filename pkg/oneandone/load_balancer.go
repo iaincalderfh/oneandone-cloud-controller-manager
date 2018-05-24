@@ -217,25 +217,14 @@ func (lb *loadBalancer) nodesToServerIpIDs(nodes []*v1.Node) ([]string, error)  
 	var serverIpIDs []string
 
 	for _, node := range nodes {
-		nodeInstanceId, ok := node.Labels[oneandoneNodeInstanceIdLabel]
-		if !ok {
-			glog.V(1).Infof("nodesToServerIDs: Node dose not have the instanceId label: %s", oneandoneNodeInstanceIdLabel)
-			break
-		}
-
-		servers, err := lb.client.ListServers(0, 0, "", nodeInstanceId, "id,name,ips")
+		server, err := serverFromNode(node, lb.client)
 		if err != nil {
-			glog.V(1).Infof("nodesToServerIDs: Error looking up servers for matching: %s", nodeInstanceId)
+			glog.V(1).Infof("nodesToServerIDs: Error looking up servers for matching: %s", node.Name)
 			break
 		}
 
-		for _, server := range servers {
-			if nodeInstanceId == server.Name {
-				for _, ip := range server.Ips {
-					serverIpIDs = append(serverIpIDs, ip.Id)
-				}
-				break
-			}
+		for _, ip := range server.Ips {
+			serverIpIDs = append(serverIpIDs, ip.Id)
 		}
 	}
 

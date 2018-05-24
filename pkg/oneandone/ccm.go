@@ -5,6 +5,8 @@ import (
 
 	"fmt"
 	"os"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientset "k8s.io/client-go/kubernetes"
 
 	"github.com/1and1/oneandone-cloudserver-sdk-go"
 	"github.com/golang/glog"
@@ -34,7 +36,9 @@ var _ cloudprovider.Interface = &CloudProvider{}
 
 type CloudProvider struct {
 	client       *oneandone.API
+	kubeclient clientset.Interface
 	loadbalancer cloudprovider.LoadBalancer
+	instances *instances
 }
 
 func newCloudProvider(config *Config) (cloudprovider.Interface, error) {
@@ -61,11 +65,19 @@ func newCloudProvider(config *Config) (cloudprovider.Interface, error) {
 	return &CloudProvider{
 		client:       apiClient,
 		loadbalancer: newLoadbalancer(apiClient, region),
+		instances: newInstances(apiClient, region),
 	}, nil
 }
 
 func (cp *CloudProvider) Initialize(clientBuilder controller.ControllerClientBuilder) {
 	glog.V(1).Infof("%s CloudProvider: Intialize called", ProviderName)
+	var err error
+	cp.kubeclient, err = clientBuilder.Client("cloud-controller-manager")
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("failed to create kubeclient: %v", err))
+	}
+
+	cp.instances.kubeNodesApi = cp.kubeclient.CoreV1().Nodes()
 }
 
 func (cp *CloudProvider) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
@@ -74,7 +86,7 @@ func (cp *CloudProvider) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 }
 
 func (cp *CloudProvider) Instances() (cloudprovider.Instances, bool) {
-	return nil, false
+	return cp.instances, true
 }
 
 func (cp *CloudProvider) Zones() (cloudprovider.Zones, bool) {
