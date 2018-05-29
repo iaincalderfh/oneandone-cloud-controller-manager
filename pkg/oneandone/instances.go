@@ -111,7 +111,7 @@ func (i *instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	return false, errors.New("not implemented")
 }
 
-// serverByID returns a *oneandone.Server value for the sserver identified by id.
+// serverByID returns a *oneandone.Server value for the server identified by id.
 func (i *instances) serverByID(id string) (*oneandone.Server, error) {
 	server, err := i.client.GetServer(id)
 	if err != nil {
