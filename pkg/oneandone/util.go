@@ -62,9 +62,22 @@ func serverFromNodeName(nodeName types.NodeName, client *oneandone.API, kubeClie
 }
 
 // nodeAddresses returns a []v1.NodeAddress from server.
-func nodeAddresses(server *oneandone.Server) ([]v1.NodeAddress, error) {
+func nodeAddresses(server *oneandone.Server, node *v1.Node) ([]v1.NodeAddress, error) {
 	var addresses []v1.NodeAddress
-	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeHostName, Address: server.Name})
+	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeHostName, Address: node.Name})
+
+	var privateIP string
+	for _, ip := range node.Status.Addresses {
+		if ip.Type == v1.NodeInternalIP {
+			privateIP = ip.Address
+			break
+		}
+	}
+
+	if privateIP == "" {
+		return nil, fmt.Errorf("could not get private ip: %v", )
+	}
+	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: privateIP})
 
 	publicIP  := server.Ips[0].Ip
 	if publicIP == "" {
