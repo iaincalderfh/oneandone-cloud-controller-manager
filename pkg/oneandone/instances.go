@@ -27,12 +27,17 @@ func newInstances(client *oneandone.API, region string) *instances {
 // When nodeName identifies more than one server, only the first will be
 // considered.
 func (i *instances) NodeAddresses(ctx context.Context, nodeName types.NodeName) ([]v1.NodeAddress, error) {
+	node, err := nodeFromName(nodeName, i.kubeNodesApi)
+	if err != nil {
+		return nil, err
+	}
+
 	server, err := serverFromNodeName(nodeName, i.client, i.kubeNodesApi)
 	if err != nil {
 		return nil, err
 	}
 
-	return nodeAddresses(server)
+	return nodeAddresses(server, node)
 }
 
 func (i *instances) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
@@ -46,7 +51,12 @@ func (i *instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 		return nil, err
 	}
 
-	return nodeAddresses(server)
+	node, err := nodeFromName(types.NodeName(server.Name), i.kubeNodesApi)
+	if err != nil {
+		return nil, err
+	}
+
+	return nodeAddresses(server, node)
 }
 // ExternalID returns the cloud provider ID of the node with the specified NodeName.
 // Note that if the instance does not exist or is no longer running, we must return ("", cloudprovider.InstanceNotFound)

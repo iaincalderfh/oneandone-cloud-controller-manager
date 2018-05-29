@@ -128,6 +128,12 @@ func (lb *loadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName stri
 			return nil, err
 		}
 
+		err = lb.UpdateLoadBalancer(ctx, clusterName, service, nodes)
+		if err != nil {
+			return nil, err
+		}
+
+
 		return &v1.LoadBalancerStatus{
 			Ingress: []v1.LoadBalancerIngress{
 				{
@@ -252,6 +258,7 @@ func (lb *loadBalancer) buildLoadBalancerRequest(service *v1.Service, nodes []*v
 
 	return &oneandone.LoadBalancerRequest{
 		Name:					lbName,
+		Description:			service.Name,
 		HealthCheckTest:		healthCheck.CheckTest,
 		HealthCheckInterval:	&healthCheck.CheckInterval,
 		Persistence:			&healthCheck.Persistence,
