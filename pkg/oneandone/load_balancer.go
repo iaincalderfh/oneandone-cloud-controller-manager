@@ -175,14 +175,20 @@ func (lb *loadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName stri
 		return err
 	}
 
-	loadBalancer, err = lb.client.AddLoadBalancerServerIps(loadBalancer.Id, serverIpIDs)
-	if err != nil {
-		return err
-	}
+	needsUpdate := lb.ensureUpdateRequired(loadBalancer, serverIpIDs)
+	if needsUpdate {
+		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer update required", service.Name)
+		loadBalancer, err = lb.client.AddLoadBalancerServerIps(loadBalancer.Id, serverIpIDs)
+		if err != nil {
+			return err
+		}
 
-	err = lb.client.WaitForState(loadBalancer, lbStatusActive, 30, 60)
-	if err != nil {
-		return err
+		err = lb.client.WaitForState(loadBalancer, lbStatusActive, 30, 60)
+		if err != nil {
+			return err
+		}
+	} else {
+		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer update required", service.Name)
 	}
 
 	return nil
@@ -323,6 +329,26 @@ func (lb *loadBalancer) lbByName(ctx context.Context, name string) (*oneandone.L
 	}
 
 	return nil, errLBNotFound
+}
+func loadBalancerHasIP(lbServerIpInfo []oneandone.ServerIpInfo, serverIpId string) bool {
+	for _, serverIpInfo := range lbServerIpInfo {
+		if serverIpInfo.Id == serverIpId {
+			return true
+		}
+	}
+	return false
+}
+
+func (lb *loadBalancer) ensureUpdateRequired(loadBalancer *oneandone.LoadBalancer, serverIpIds []string) bool {
+	var updateRequired = false
+	for _, serverIpId := range serverIpIds  {
+		if !loadBalancerHasIP(loadBalancer.ServerIps, serverIpId) {
+			updateRequired = true
+		}
+	}
+
+	return updateRequired
+
 }
 
 // buildForwardingRules returns the forwarding rules of the Load Balancer of
