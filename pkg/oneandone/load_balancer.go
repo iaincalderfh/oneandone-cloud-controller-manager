@@ -110,7 +110,7 @@ func (lb *loadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName stri
 	}
 
 	if !exists {
-		lbRequest, err := lb.buildLoadBalancerRequest(service, nodes)
+		lbRequest, err := lb.buildCreateLoadBalancerRequest(service)
 		if err != nil {
 			return nil, err
 		}
@@ -171,9 +171,8 @@ func (lb *loadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName stri
 		return err
 	}
 
-	needsUpdate := lb.ensureUpdateRequired(loadBalancer, serverIPIDs)
-	if needsUpdate {
-		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer update required", service.Name)
+	if lb.ensureServerIpUpdateUpdateRequired(loadBalancer, serverIPIDs) {
+		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer server ip update required", service.Name)
 		loadBalancer, err = lb.client.AddLoadBalancerServerIps(loadBalancer.Id, serverIPIDs)
 		if err != nil {
 			return err
@@ -184,7 +183,52 @@ func (lb *loadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName stri
 			return err
 		}
 	} else {
-		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer update required", service.Name)
+		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer server ip update NOT required", service.Name)
+	}
+
+	if lb.loadBalancerUpdateRequired(loadBalancer, service) {
+		lbRequest, err := lb.buildUpdateLoadBalancerRequest(service)
+		if err != nil {
+			return err
+		}
+		loadBalancer, err = lb.client.UpdateLoadBalancer(loadBalancer.Id, lbRequest)
+		if err != nil {
+			return err
+		}
+	}
+
+	if lb.ruleUpdateRequired(loadBalancer, service) {
+		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer rules update required", service.Name)
+
+		rulesToAdd := lb.findRulesToAdd(loadBalancer.Rules, service.Spec.Ports)
+		if len(rulesToAdd) > 0 {
+			loadBalancer, err = lb.client.AddLoadBalancerRules(loadBalancer.Id, rulesToAdd)
+			if err != nil {
+				return err
+			}
+
+			err = lb.client.WaitForState(loadBalancer, lbStatusActive, 30, 60)
+			if err != nil {
+				return err
+			}
+		}
+
+		rulesToRemove := lb.findRulesToRemove(loadBalancer.Rules, service.Spec.Ports)
+		if len(rulesToRemove) > 0 {
+			for _, rule := range rulesToRemove {
+				loadBalancer, err = lb.client.DeleteLoadBalancerRule(loadBalancer.Id, rule.Id)
+				if err != nil {
+					return err
+				}
+
+				err = lb.client.WaitForState(loadBalancer, lbStatusActive, 30, 60)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	} else {
+		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer rules update NOT required", service.Name)
 	}
 
 	return nil
@@ -239,9 +283,9 @@ func (lb *loadBalancer) nodesToServerIPIDs(nodes []*v1.Node) ([]string, error) {
 	return serverIPIDs, nil
 }
 
-// buildLoadBalancerRequest returns a *oneandone.LoadBalancerRequest to balance
+// buildCreateLoadBalancerRequest returns a *oneandone.LoadBalancerRequest to balance
 // requests for service across nodes.
-func (lb *loadBalancer) buildLoadBalancerRequest(service *v1.Service, nodes []*v1.Node) (*oneandone.LoadBalancerRequest, error) {
+func (lb *loadBalancer) buildCreateLoadBalancerRequest(service *v1.Service) (*oneandone.LoadBalancerRequest, error) {
 	lbName := cloudprovider.GetLoadBalancerName(service)
 
 	algorithm := getAlgorithm(service)
@@ -270,6 +314,26 @@ func (lb *loadBalancer) buildLoadBalancerRequest(service *v1.Service, nodes []*v
 		Rules:               forwardingRules,
 	}, nil
 }
+
+// buildUpdateLoadBalancerRequest returns a *oneandone.LoadBalancerRequest to balance
+// requests for service across nodes.
+func (lb *loadBalancer) buildUpdateLoadBalancerRequest(service *v1.Service) (*oneandone.LoadBalancerRequest, error) {
+	lbName := cloudprovider.GetLoadBalancerName(service)
+	algorithm := getAlgorithm(service)
+	healthCheck := buildHealthCheck(service)
+
+	return &oneandone.LoadBalancerRequest{
+		Name:					lbName,
+		Description:			service.Name,
+		HealthCheckTest:		healthCheck.CheckTest,
+		HealthCheckInterval:	&healthCheck.CheckInterval,
+		Persistence:			&healthCheck.Persistence,
+		PersistenceTime:		&healthCheck.PersistenceTime,
+		Method:					algorithm,
+	}, nil
+}
+
+
 
 func (lb *loadBalancer) getIDForRegion(regionCode string) (string, error) {
 	dcs, err := lb.client.ListDatacenters()
@@ -336,16 +400,82 @@ func loadBalancerHasIP(lbServerIPInfo []oneandone.ServerIpInfo, serverIPID strin
 	return false
 }
 
-func (lb *loadBalancer) ensureUpdateRequired(loadBalancer *oneandone.LoadBalancer, serverIPIDs []string) bool {
-	var updateRequired = false
-	for _, serverIPID := range serverIPIDs {
+func (lb *loadBalancer) ensureServerIpUpdateUpdateRequired(loadBalancer *oneandone.LoadBalancer, serverIPIDs []string) bool {
+	for _, serverIPID := range serverIPIDs  {
 		if !loadBalancerHasIP(loadBalancer.ServerIps, serverIPID) {
-			updateRequired = true
+			return true
 		}
 	}
 
-	return updateRequired
+	return false
+}
 
+func loadBalancerHasRule(loadBalancerRules []oneandone.LoadBalancerRule, servicePort v1.ServicePort) bool {
+	for _, rule := range loadBalancerRules {
+		hasSameProtocol := string(rule.Protocol) == string(servicePort.Protocol)
+		hasSameInternalPort := string(rule.PortServer) == string(servicePort.NodePort)
+		hasSameExternalPort := string(rule.PortBalancer) == string(servicePort.Port)
+		if  hasSameProtocol && hasSameInternalPort &&  hasSameExternalPort{
+			return true
+		}
+	}
+
+	return false
+}
+
+func serviceHasPort(existingServicePorts []v1.ServicePort, lbRule oneandone.LoadBalancerRule) bool {
+	for _, port := range existingServicePorts {
+		hasSameProtocol := string(lbRule.Protocol) == string(port.Protocol)
+		hasSameInternalPort := string(lbRule.PortServer) == string(port.NodePort)
+		hasSameExternalPort := string(lbRule.PortBalancer) == string(port.Port)
+		if  hasSameProtocol && hasSameInternalPort &&  hasSameExternalPort{
+			return true
+		}
+	}
+
+	return false
+}
+
+func (lb *loadBalancer) ruleUpdateRequired(loadBalancer *oneandone.LoadBalancer, service *v1.Service) bool {
+	for _, port := range service.Spec.Ports  {
+		if !loadBalancerHasRule(loadBalancer.Rules, port) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (lb *loadBalancer) findRulesToAdd(existingRules []oneandone.LoadBalancerRule, requiredServicePorts []v1.ServicePort) []oneandone.LoadBalancerRule {
+	var rulesToAdd []oneandone.LoadBalancerRule
+	for _, port := range requiredServicePorts {
+		if !loadBalancerHasRule(existingRules, port) {
+			rulesToAdd = append(rulesToAdd, buildRuleFromServicePort(port))
+		}
+	}
+
+	return rulesToAdd
+}
+
+func (lb *loadBalancer) findRulesToRemove(existingRules []oneandone.LoadBalancerRule, requiredServicePorts []v1.ServicePort) []oneandone.LoadBalancerRule {
+	var rulesToRemove []oneandone.LoadBalancerRule
+	for _, lbRule := range existingRules {
+		if !serviceHasPort(requiredServicePorts, lbRule) {
+			rulesToRemove = append(rulesToRemove, lbRule)
+		}
+	}
+
+	return rulesToRemove
+}
+
+func (lb *loadBalancer) loadBalancerUpdateRequired(loadBalancer *oneandone.LoadBalancer, service *v1.Service) bool {
+	hasSameDescription := loadBalancer.Description == service.Name
+	hasSameMethod := loadBalancer.Method == getAlgorithm(service)
+	if hasSameDescription && hasSameMethod {
+		return false // Update is not required
+	}
+
+	return true
 }
 
 // buildForwardingRules returns the forwarding rules of the Load Balancer of
@@ -353,16 +483,19 @@ func (lb *loadBalancer) ensureUpdateRequired(loadBalancer *oneandone.LoadBalance
 func buildForwardingRules(service *v1.Service) ([]oneandone.LoadBalancerRule, error) {
 	var forwardingRules []oneandone.LoadBalancerRule
 	for _, port := range service.Spec.Ports {
-		var forwardingRule oneandone.LoadBalancerRule
-
-		forwardingRule.Protocol = string(port.Protocol)
-
-		forwardingRule.PortBalancer = uint16(port.Port)
-		forwardingRule.PortServer = uint16(port.NodePort)
-		forwardingRule.Source = "0.0.0.0" //TODO: get this from service annotation
-
+		var forwardingRule = buildRuleFromServicePort(port)
 		forwardingRules = append(forwardingRules, forwardingRule)
 	}
 
 	return forwardingRules, nil
+}
+
+// buildRuleFromServicePort TODO: get source IP from service annotation
+func buildRuleFromServicePort(servicePort v1.ServicePort) oneandone.LoadBalancerRule {
+	var forwardingRule oneandone.LoadBalancerRule
+	forwardingRule.Protocol = string(servicePort.Protocol)
+	forwardingRule.PortBalancer = uint16(servicePort.Port)
+	forwardingRule.PortServer = uint16(servicePort.NodePort)
+
+	return forwardingRule
 }
