@@ -5,6 +5,7 @@ import (
 
 	"fmt"
 	"os"
+
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientset "k8s.io/client-go/kubernetes"
 
@@ -18,12 +19,12 @@ const (
 	oneAPITokenEnv       = "ONE_API_TOKEN"
 	oneOverrideAPIURLEnv = "ONE_OVERRIDE_URL"
 	oneInstanceRegionEnv = "ONE_INSTANCE_REGION"
-	ProviderName         = "oneandone"
+	providerName         = "oneandone"
 )
 
 func init() {
 	cloudprovider.RegisterCloudProvider("oneandone", func(config io.Reader) (cloudprovider.Interface, error) {
-		cfg, err := ReadConfig(config)
+		cfg, err := readConfig(config)
 		if err != nil {
 			return nil, err
 		}
@@ -32,79 +33,94 @@ func init() {
 }
 
 // Compile-time check that CloudProvider implements cloudprovider.Interface
-var _ cloudprovider.Interface = &CloudProvider{}
+var _ cloudprovider.Interface = &cloudProvider{}
 
-type CloudProvider struct {
+type cloudProvider struct {
 	client       *oneandone.API
-	kubeclient clientset.Interface
+	kubeclient   clientset.Interface
 	loadbalancer cloudprovider.LoadBalancer
-	instances *instances
+	instances    *instances
 }
 
-func newCloudProvider(config *Config) (cloudprovider.Interface, error) {
+func newCloudProvider(config *config) (cloudprovider.Interface, error) {
 	token := oneandone.SetToken(os.Getenv(oneAPITokenEnv))
 	if token == "" {
-		return nil, fmt.Errorf("environment variable %q is required", oneAPITokenEnv)
+		return nil, fmt.Errorf("Environment variable %q is required", oneAPITokenEnv)
 	}
 
-	baseUrl := oneandone.BaseUrl
+	baseURL := oneandone.BaseUrl
 	if overrideURL := os.Getenv(oneOverrideAPIURLEnv); overrideURL != "" {
-		baseUrl = overrideURL
+		baseURL = overrideURL
 	}
 
-	apiClient := oneandone.New(token, baseUrl)
+	apiClient := oneandone.New(token, baseURL)
 	if apiClient == nil {
-		return nil, fmt.Errorf("failed to create oneandone api client")
+		return nil, fmt.Errorf("Failed to create oneandone api client")
 	}
 
 	region := os.Getenv(oneInstanceRegionEnv)
 	if region == "" {
-		return nil, fmt.Errorf("environment variable %q is required", oneInstanceRegionEnv)
+		return nil, fmt.Errorf("Environment variable %q is required", oneInstanceRegionEnv)
 	}
 
-	return &CloudProvider{
+	return &cloudProvider{
 		client:       apiClient,
 		loadbalancer: newLoadbalancer(apiClient, region),
-		instances: newInstances(apiClient, region),
+		instances:    newInstances(apiClient, region),
 	}, nil
 }
 
-func (cp *CloudProvider) Initialize(clientBuilder controller.ControllerClientBuilder) {
-	glog.V(1).Infof("%s CloudProvider: Intialize called", ProviderName)
+// Initialize implements cloudprovider.Interface.Initialize
+// A Kubernetes client is obtained from the clientBuilder.
+func (cp *cloudProvider) Initialize(clientBuilder controller.ControllerClientBuilder) {
+	glog.V(1).Infof("%s CloudProvider: Intialize called", providerName)
 	var err error
 	cp.kubeclient, err = clientBuilder.Client("cloud-controller-manager")
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("failed to create kubeclient: %v", err))
 	}
 
-	cp.instances.kubeNodesApi = cp.kubeclient.CoreV1().Nodes()
+	cp.instances.kubeNodesAPI = cp.kubeclient.CoreV1().Nodes()
 }
 
-func (cp *CloudProvider) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
-	glog.V(1).Infof("%s CloudProvider: LoadBalancer called", ProviderName)
+// LoadBalancer implements cloudprovider.Interface.LoadBalancer
+// Returns a cloudprovider.LoadBalancer interface for 1AND1.
+func (cp *cloudProvider) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 	return cp.loadbalancer, true
 }
 
-func (cp *CloudProvider) Instances() (cloudprovider.Instances, bool) {
+// Instances implements cloudprovider.Interface.Instances
+// Returns a cloudprovider.Instances interface for 1AND1.
+func (cp *cloudProvider) Instances() (cloudprovider.Instances, bool) {
 	return cp.instances, true
 }
 
-func (cp *CloudProvider) Zones() (cloudprovider.Zones, bool) {
+// Zones implements cloudprovider.Interface.Zones
+// Returns (nil,false) as this interface is not currently supported for 1AND1.
+func (cp *cloudProvider) Zones() (cloudprovider.Zones, bool) {
 	return nil, false
 }
 
-func (cp *CloudProvider) Clusters() (cloudprovider.Clusters, bool) {
+// Clusters implements cloudprovider.Interface.Clusters
+// Returns (nil,false) as this interface is not currently supported for 1AND1.
+func (cp *cloudProvider) Clusters() (cloudprovider.Clusters, bool) {
 	return nil, false
 }
 
-func (cp *CloudProvider) Routes() (cloudprovider.Routes, bool) {
+// Routes implements cloudprovider.Interface.Routes
+// Returns (nil,false) as this interface is not currently supported for 1AND1.
+func (cp *cloudProvider) Routes() (cloudprovider.Routes, bool) {
 	return nil, false
 }
 
-func (cp *CloudProvider) ProviderName() string {
-	return ProviderName
+// ProviderName implements cloudprovider.Interface.ProviderName
+// Returns our cloud provider name.
+func (cp *cloudProvider) ProviderName() string {
+	return providerName
 }
 
-func (cp *CloudProvider) HasClusterID() bool {
+// HasClusterID implements cloudprovider.Interface.HasClusterID
+// Returns false.
+func (cp *cloudProvider) HasClusterID() bool {
 	return false
 }

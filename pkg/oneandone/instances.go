@@ -1,20 +1,21 @@
 package oneandone
 
 import (
-	"github.com/1and1/oneandone-cloudserver-sdk-go"
 	"context"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/api/core/v1"
 	"errors"
-	v12 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"strings"
 	"fmt"
+	"strings"
+
+	"github.com/1and1/oneandone-cloudserver-sdk-go"
+	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	v12 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 type instances struct {
-	client *oneandone.API
-	region string
-	kubeNodesApi v12.NodeInterface
+	client       *oneandone.API
+	region       string
+	kubeNodesAPI v12.NodeInterface
 }
 
 func newInstances(client *oneandone.API, region string) *instances {
@@ -27,12 +28,12 @@ func newInstances(client *oneandone.API, region string) *instances {
 // When nodeName identifies more than one server, only the first will be
 // considered.
 func (i *instances) NodeAddresses(ctx context.Context, nodeName types.NodeName) ([]v1.NodeAddress, error) {
-	node, err := nodeFromName(nodeName, i.kubeNodesApi)
+	node, err := nodeFromName(nodeName, i.kubeNodesAPI)
 	if err != nil {
 		return nil, err
 	}
 
-	server, err := serverFromNodeName(nodeName, i.client, i.kubeNodesApi)
+	server, err := serverFromNodeName(nodeName, i.client, i.kubeNodesAPI)
 	if err != nil {
 		return nil, err
 	}
@@ -51,36 +52,40 @@ func (i *instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 		return nil, err
 	}
 
-	node, err := nodeFromName(types.NodeName(server.Name), i.kubeNodesApi)
+	node, err := nodeFromName(types.NodeName(server.Name), i.kubeNodesAPI)
 	if err != nil {
 		return nil, err
 	}
 
 	return nodeAddresses(server, node)
 }
+
 // ExternalID returns the cloud provider ID of the node with the specified NodeName.
 // Note that if the instance does not exist or is no longer running, we must return ("", cloudprovider.InstanceNotFound)
 func (i *instances) ExternalID(ctx context.Context, nodeName types.NodeName) (string, error) {
-	return i.InstanceID(ctx,  nodeName)
+	return i.InstanceID(ctx, nodeName)
 }
+
 // InstanceID returns the cloud provider ID of the node with the specified NodeName.
 func (i *instances) InstanceID(ctx context.Context, nodeName types.NodeName) (string, error) {
-	server, err := serverFromNodeName(nodeName, i.client, i.kubeNodesApi)
+	server, err := serverFromNodeName(nodeName, i.client, i.kubeNodesAPI)
 	if err != nil {
 		return "", err
 	}
 
 	return server.Id, nil
 }
+
 // InstanceType returns the type of the specified instance.
 func (i *instances) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
-	server, err := serverFromNodeName(name, i.client, i.kubeNodesApi)
+	server, err := serverFromNodeName(name, i.client, i.kubeNodesAPI)
 	if err != nil {
 		return "", err
 	}
 
 	return server.ServerType, nil
 }
+
 // InstanceTypeByProviderID returns the type of the specified instance.
 func (i *instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	id, err := serverIDFromProviderID(providerID)
@@ -95,16 +100,19 @@ func (i *instances) InstanceTypeByProviderID(ctx context.Context, providerID str
 
 	return server.ServerType, nil
 }
+
 // AddSSHKeyToAllInstances adds an SSH public key as a legal identity for all instances
 // expected format for the key is standard ssh-keygen format: <protocol> <blob>
 func (i *instances) AddSSHKeyToAllInstances(ctx context.Context, user string, keyData []byte) error {
 	return errors.New("not implemented")
 }
+
 // CurrentNodeName returns the name of the node we are currently running on
 // On most clouds (e.g. GCE) this is the hostname, so we provide the hostname
 func (i *instances) CurrentNodeName(ctx context.Context, hostname string) (types.NodeName, error) {
 	return types.NodeName(hostname), nil
 }
+
 // InstanceExistsByProviderID returns true if the instance for the given provider id still is running.
 // If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
 func (i *instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
@@ -136,8 +144,8 @@ func serverIDFromProviderID(providerID string) (string, error) {
 	}
 
 	// since split[0] is actually "oneandone:"
-	if strings.TrimSuffix(split[0], ":") != ProviderName {
-		return "", fmt.Errorf("provider name from providerID should be oneandone: %s", providerID)
+	if strings.TrimSuffix(split[0], ":") != providerName {
+		return "", fmt.Errorf("Provider name from providerID should be %s: %s", providerName, providerID)
 	}
 
 	return split[2], nil

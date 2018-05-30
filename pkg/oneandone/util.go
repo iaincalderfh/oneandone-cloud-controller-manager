@@ -1,28 +1,30 @@
 package oneandone
 
 import (
+	"errors"
+	"fmt"
+
+	"github.com/1and1/oneandone-cloudserver-sdk-go"
+	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v12 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"fmt"
-	"github.com/1and1/oneandone-cloudserver-sdk-go"
 	"k8s.io/apimachinery/pkg/types"
-	"errors"
+	v12 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 func serverFromNode(node *v1.Node, client *oneandone.API) (*oneandone.Server, error) {
-	nodeInstanceId, ok := node.Labels[oneandoneNodeInstanceIdLabel]
+	nodeInstanceID, ok := node.Labels[oneandoneNodeInstanceIDLabel]
 	if !ok {
-		return nil, fmt.Errorf("serverFromNode: Node does not have the instanceId label: %s", oneandoneNodeInstanceIdLabel)
+		return nil, fmt.Errorf("serverFromNode: Node does not have the instanceId label: %s", oneandoneNodeInstanceIDLabel)
 	}
 
-	servers, err := client.ListServers(0, 0, "", nodeInstanceId, "id,name")
+	servers, err := client.ListServers(0, 0, "", nodeInstanceID, "id,name")
 	if err != nil {
-		return nil, fmt.Errorf("serverFromNode: Error looking up servers for matching: %s", nodeInstanceId)
+		return nil, fmt.Errorf("serverFromNode: Error looking up servers for matching: %s", nodeInstanceID)
 	}
 
 	for _, server := range servers {
-		if nodeInstanceId == server.Name {
+		if nodeInstanceID == server.Name {
 			fullServer, err := client.GetServer(server.Id)
 			if err != nil {
 				return nil, fmt.Errorf("serverFromNode: Error looking up server by id: %s", server.Id)
@@ -31,7 +33,7 @@ func serverFromNode(node *v1.Node, client *oneandone.API) (*oneandone.Server, er
 		}
 	}
 
-	return nil, fmt.Errorf("serverFromNode: Could not find server with name: %s", nodeInstanceId)
+	return nil, fmt.Errorf("serverFromNode: Could not find server with name: %s", nodeInstanceID)
 }
 
 func nodeFromName(nodeName types.NodeName, kubeClient v12.NodeInterface) (*v1.Node, error) {
@@ -74,16 +76,18 @@ func nodeAddresses(server *oneandone.Server, node *v1.Node) ([]v1.NodeAddress, e
 		}
 	}
 
-	if privateIP == "" {
-		return nil, fmt.Errorf("could not get private ip: %v", )
+	if privateIP != "" {
+		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: privateIP})
+	} else {
+		glog.V(1).Infof("nodeAddresses: could not get private ip for node: %v", node.Name)
 	}
-	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: privateIP})
 
-	publicIP  := server.Ips[0].Ip
-	if publicIP == "" {
-		return nil, fmt.Errorf("nodeAddresses: could not get public ip: %v", publicIP)
+	publicIP := server.Ips[0].Ip
+	if publicIP != "" {
+		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeExternalIP, Address: publicIP})
+	} else {
+		glog.V(1).Infof("nodeAddresses: could not get public ip for node: %v", node.Name)
 	}
-	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeExternalIP, Address: publicIP})
 
 	return addresses, nil
 }

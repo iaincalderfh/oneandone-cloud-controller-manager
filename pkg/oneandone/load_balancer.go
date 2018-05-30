@@ -3,12 +3,13 @@ package oneandone
 import (
 	"context"
 
+	"errors"
+	"fmt"
+
+	"github.com/1and1/oneandone-cloudserver-sdk-go"
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
-	"github.com/1and1/oneandone-cloudserver-sdk-go"
-	"fmt"
-	"errors"
 )
 
 const (
@@ -28,14 +29,14 @@ const (
 
 	// oneandoneNodeInstanceIdLabel is the label specifying the unique identifier of the node
 	// or server name on the oneandone api.
-	oneandoneNodeInstanceIdLabel = "stackpoint.io/instance_id"
+	oneandoneNodeInstanceIDLabel = "stackpoint.io/instance_id"
 
 	// defaultActiveCheckTick is the number of seconds between load balancer
 	// status checks when waiting for activation.
 	defaultActiveCheckTick = 5
 
 	// statuses for oneandone load balancer
-	lbStatusActive  = "ACTIVE"
+	lbStatusActive = "ACTIVE"
 )
 
 var errLBNotFound = errors.New("loadbalancer not found")
@@ -50,7 +51,7 @@ type loadBalancer struct {
 	lbActiveCheckTick int
 }
 
-type HealthCheck struct {
+type healthCheck struct {
 	CheckTest       string
 	CheckInterval   int
 	CheckPath       string
@@ -58,8 +59,6 @@ type HealthCheck struct {
 	Persistence     bool
 	PersistenceTime int
 }
-
-
 
 // newLoadbalancers returns a cloudprovider.LoadBalancer whose concrete type is a *loadbalancer.
 func newLoadbalancer(client *oneandone.API, region string) cloudprovider.LoadBalancer {
@@ -96,8 +95,6 @@ func (lb *loadBalancer) GetLoadBalancer(ctx context.Context, clusterName string,
 			},
 		},
 	}, true, nil
-
-	return nil, false, nil
 }
 
 // EnsureLoadBalancer ensures that the cluster is running a load balancer for
@@ -132,7 +129,6 @@ func (lb *loadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName stri
 		if err != nil {
 			return nil, err
 		}
-
 
 		return &v1.LoadBalancerStatus{
 			Ingress: []v1.LoadBalancerIngress{
@@ -170,15 +166,15 @@ func (lb *loadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName stri
 		return err
 	}
 
-	serverIpIDs, err := lb.nodesToServerIpIDs(nodes)
+	serverIPIDs, err := lb.nodesToServerIPIDs(nodes)
 	if err != nil {
 		return err
 	}
 
-	needsUpdate := lb.ensureUpdateRequired(loadBalancer, serverIpIDs)
+	needsUpdate := lb.ensureUpdateRequired(loadBalancer, serverIPIDs)
 	if needsUpdate {
 		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer update required", service.Name)
-		loadBalancer, err = lb.client.AddLoadBalancerServerIps(loadBalancer.Id, serverIpIDs)
+		loadBalancer, err = lb.client.AddLoadBalancerServerIps(loadBalancer.Id, serverIPIDs)
 		if err != nil {
 			return err
 		}
@@ -225,8 +221,8 @@ func (lb *loadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 // oneandoneNodeInstanceIdLabel on a node.
 //
 // oneandoneNodeInstanceIdLabel on nodes are assumed to match oneandone server names.
-func (lb *loadBalancer) nodesToServerIpIDs(nodes []*v1.Node) ([]string, error)  {
-	var serverIpIDs []string
+func (lb *loadBalancer) nodesToServerIPIDs(nodes []*v1.Node) ([]string, error) {
+	var serverIPIDs []string
 
 	for _, node := range nodes {
 		server, err := serverFromNode(node, lb.client)
@@ -236,11 +232,11 @@ func (lb *loadBalancer) nodesToServerIpIDs(nodes []*v1.Node) ([]string, error)  
 		}
 
 		for _, ip := range server.Ips {
-			serverIpIDs = append(serverIpIDs, ip.Id)
+			serverIPIDs = append(serverIPIDs, ip.Id)
 		}
 	}
 
-	return serverIpIDs, nil
+	return serverIPIDs, nil
 }
 
 // buildLoadBalancerRequest returns a *oneandone.LoadBalancerRequest to balance
@@ -255,7 +251,7 @@ func (lb *loadBalancer) buildLoadBalancerRequest(service *v1.Service, nodes []*v
 		return nil, err
 	}
 
-	regionId, err := lb.getIdForRegion(lb.region)
+	regionID, err := lb.getIDForRegion(lb.region)
 	if err != nil {
 		return nil, err
 	}
@@ -263,19 +259,19 @@ func (lb *loadBalancer) buildLoadBalancerRequest(service *v1.Service, nodes []*v
 	healthCheck := buildHealthCheck(service)
 
 	return &oneandone.LoadBalancerRequest{
-		Name:					lbName,
-		Description:			service.Name,
-		HealthCheckTest:		healthCheck.CheckTest,
-		HealthCheckInterval:	&healthCheck.CheckInterval,
-		Persistence:			&healthCheck.Persistence,
-		PersistenceTime:		&healthCheck.PersistenceTime,
-		DatacenterId:			regionId,
-		Method:					algorithm,
-		Rules:					forwardingRules,
+		Name:                lbName,
+		Description:         service.Name,
+		HealthCheckTest:     healthCheck.CheckTest,
+		HealthCheckInterval: &healthCheck.CheckInterval,
+		Persistence:         &healthCheck.Persistence,
+		PersistenceTime:     &healthCheck.PersistenceTime,
+		DatacenterId:        regionID,
+		Method:              algorithm,
+		Rules:               forwardingRules,
 	}, nil
 }
 
-func (lb *loadBalancer) getIdForRegion(regionCode string) (string, error) {
+func (lb *loadBalancer) getIDForRegion(regionCode string) (string, error) {
 	dcs, err := lb.client.ListDatacenters()
 	if err != nil {
 		return "", err
@@ -292,11 +288,11 @@ func (lb *loadBalancer) getIdForRegion(regionCode string) (string, error) {
 
 // buildHealthCheck returns a *HealthCheck helper object which is used for loadbalancer
 // creation requests TODO: Get these from service annotations
-func buildHealthCheck(service *v1.Service) *HealthCheck {
-	return &HealthCheck{
-		CheckTest: "ICMP",
-		CheckInterval: 15,
-		Persistence: true,
+func buildHealthCheck(service *v1.Service) *healthCheck {
+	return &healthCheck{
+		CheckTest:       "ICMP",
+		CheckInterval:   15,
+		Persistence:     true,
 		PersistenceTime: 1200,
 	}
 }
@@ -330,19 +326,20 @@ func (lb *loadBalancer) lbByName(ctx context.Context, name string) (*oneandone.L
 
 	return nil, errLBNotFound
 }
-func loadBalancerHasIP(lbServerIpInfo []oneandone.ServerIpInfo, serverIpId string) bool {
-	for _, serverIpInfo := range lbServerIpInfo {
-		if serverIpInfo.Id == serverIpId {
+
+func loadBalancerHasIP(lbServerIPInfo []oneandone.ServerIpInfo, serverIPID string) bool {
+	for _, serverIPInfo := range lbServerIPInfo {
+		if serverIPInfo.Id == serverIPID {
 			return true
 		}
 	}
 	return false
 }
 
-func (lb *loadBalancer) ensureUpdateRequired(loadBalancer *oneandone.LoadBalancer, serverIpIds []string) bool {
+func (lb *loadBalancer) ensureUpdateRequired(loadBalancer *oneandone.LoadBalancer, serverIPIDs []string) bool {
 	var updateRequired = false
-	for _, serverIpId := range serverIpIds  {
-		if !loadBalancerHasIP(loadBalancer.ServerIps, serverIpId) {
+	for _, serverIPID := range serverIPIDs {
+		if !loadBalancerHasIP(loadBalancer.ServerIps, serverIPID) {
 			updateRequired = true
 		}
 	}

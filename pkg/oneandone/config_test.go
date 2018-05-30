@@ -11,7 +11,7 @@ firewall:
 `
 
 func TestValidConfigFirewall(t *testing.T) {
-	config, err := ReadConfig(strings.NewReader(validConfig))
+	config, err := readConfig(strings.NewReader(validConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
