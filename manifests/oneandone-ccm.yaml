@@ -53,12 +53,12 @@ spec:
             cpu: 100m
             memory: 50Mi
         env:
-          - name: ONE_INSTANCE_REGION
+          - name: ONEANDONE_INSTANCE_REGION
             valueFrom:
               secretKeyRef:
                 name: oneandone
                 key: credentials-datacenter
-          - name: ONE_API_TOKEN
+          - name: ONEANDONE_API_KEY
             valueFrom:
               secretKeyRef:
                 name: oneandone
