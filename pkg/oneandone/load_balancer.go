@@ -130,13 +130,12 @@ func (lb *loadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName stri
 			return nil, err
 		}
 
-		return &v1.LoadBalancerStatus{
-			Ingress: []v1.LoadBalancerIngress{
-				{
-					IP: loadBalancer.Ip,
-				},
-			},
-		}, nil
+		lbStatus, exists, err = lb.GetLoadBalancer(ctx, clusterName, service)
+		if err != nil {
+			return nil, err
+		}
+
+		return lbStatus, nil
 	}
 
 	err = lb.UpdateLoadBalancer(ctx, clusterName, service, nodes)
@@ -496,6 +495,7 @@ func buildRuleFromServicePort(servicePort v1.ServicePort) oneandone.LoadBalancer
 	forwardingRule.Protocol = string(servicePort.Protocol)
 	forwardingRule.PortBalancer = uint16(servicePort.Port)
 	forwardingRule.PortServer = uint16(servicePort.NodePort)
+	forwardingRule.Source = "0.0.0.0"
 
 	return forwardingRule
 }
