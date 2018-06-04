@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	oneAPITokenEnv       = "ONE_API_TOKEN"
-	oneOverrideAPIURLEnv = "ONE_OVERRIDE_URL"
-	oneInstanceRegionEnv = "ONE_INSTANCE_REGION"
+	oneAPITokenEnv       = "ONEANDONE_API_KEY"
+	oneOverrideAPIURLEnv = "ONEANDONE_OVERRIDE_URL"
+	oneInstanceRegionEnv = "ONEANDONE_INSTANCE_REGION"
 	providerName         = "oneandone"
 )
 
