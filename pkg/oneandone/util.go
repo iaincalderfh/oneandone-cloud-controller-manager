@@ -10,30 +10,69 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	v12 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"net"
 )
 
 func serverFromNode(node *v1.Node, client *oneandone.API) (*oneandone.Server, error) {
+	// Get Server by name identified by oneandoneNodeInstanceIDLabel
 	nodeInstanceID, ok := node.Labels[oneandoneNodeInstanceIDLabel]
-	if !ok {
-		return nil, fmt.Errorf("serverFromNode: Node does not have the instanceId label: %s", oneandoneNodeInstanceIDLabel)
+	if ok {
+		return serverFromName(nodeInstanceID, client)
 	}
 
-	servers, err := client.ListServers(0, 0, "", nodeInstanceID, "id,name")
+	// Get Server by name identified by node name
+	server, err := serverFromName(node.Name, client)
+	if err != nil && server != nil {
+		return server, nil
+	}
+
+	// Get Server by node public IP
+	externalIP, err := getExternalIP(node)
+	if err == nil {
+		return nil, err
+	}
+
+	return serverFromExternalIP(string(externalIP), client)
+}
+
+func serverFromName(serverName string, client *oneandone.API) (*oneandone.Server, error) {
+	servers, err := client.ListServers(0, 0, "", serverName, "id,name")
 	if err != nil {
-		return nil, fmt.Errorf("serverFromNode: Error looking up servers for matching: %s", nodeInstanceID)
+		return nil, fmt.Errorf("serverFromName: Error looking up servers for matching: %s", serverName)
 	}
 
 	for _, server := range servers {
-		if nodeInstanceID == server.Name {
+		if serverName == server.Name {
 			fullServer, err := client.GetServer(server.Id)
 			if err != nil {
-				return nil, fmt.Errorf("serverFromNode: Error looking up server by id: %s", server.Id)
+				return nil, fmt.Errorf("serverFromName: Error looking up server by id: %s", server.Id)
 			}
 			return fullServer, nil
 		}
 	}
 
-	return nil, fmt.Errorf("serverFromNode: Could not find server with name: %s", nodeInstanceID)
+	return nil, fmt.Errorf("serverFromName: Error Server with name: %s NOT_FOUND", serverName)
+}
+
+func serverFromExternalIP(externalIP string, client *oneandone.API) (*oneandone.Server, error) {
+	servers, err := client.ListServers(0, 0, "", externalIP, "id,name,ips")
+	if err != nil {
+		return nil, fmt.Errorf("serverFromExternalIP: Error looking up servers for matching: %s", externalIP)
+	}
+
+	for _, server := range servers {
+		for _, ip := range server.Ips {
+			if externalIP == ip.Ip {
+				fullServer, err := client.GetServer(server.Id)
+				if err != nil {
+					return nil, fmt.Errorf("serverFromExternalIP: Error looking up server by ip: %s", server.Id)
+				}
+				return fullServer, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("serverFromExternalIP: Error Server with ip: %s NOT_FOUND", externalIP)
 }
 
 func nodeFromName(nodeName types.NodeName, kubeClient v12.NodeInterface) (*v1.Node, error) {
@@ -90,4 +129,14 @@ func nodeAddresses(server *oneandone.Server, node *v1.Node) ([]v1.NodeAddress, e
 	}
 
 	return addresses, nil
+}
+
+func getExternalIP(node *v1.Node) (net.IP, error) {
+	for _, ip := range node.Status.Addresses {
+		if ip.Type == v1.NodeExternalIP {
+			return net.ParseIP(ip.Address), nil
+		}
+	}
+
+	return nil, fmt.Errorf("getExternalIP: Could not find an external ip for node: %s", node.Name)
 }
