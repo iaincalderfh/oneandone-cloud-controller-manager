@@ -22,7 +22,7 @@ func serverFromNode(node *v1.Node, client *oneandone.API) (*oneandone.Server, er
 
 	// Get Server by name identified by node name
 	server, err := serverFromName(node.Name, client)
-	if err != nil && server != nil {
+	if err == nil && server != nil {
 		return server, nil
 	}
 
