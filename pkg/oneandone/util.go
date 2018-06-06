@@ -106,25 +106,14 @@ func nodeAddresses(server *oneandone.Server, node *v1.Node) ([]v1.NodeAddress, e
 	var addresses []v1.NodeAddress
 	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeHostName, Address: node.Name})
 
-	var privateIP string
-	for _, ip := range node.Status.Addresses {
-		if ip.Type == v1.NodeInternalIP {
-			privateIP = ip.Address
-			break
-		}
+	// Private IP Addresses
+	for _, privateNetwork := range server.PrivateNets {
+		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: privateNetwork.ServerIP})
 	}
 
-	if privateIP != "" {
-		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: privateIP})
-	} else {
-		glog.V(1).Infof("nodeAddresses: could not get private ip for node: %v", node.Name)
-	}
-
-	publicIP := server.Ips[0].Ip
-	if publicIP != "" {
-		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeExternalIP, Address: publicIP})
-	} else {
-		glog.V(1).Infof("nodeAddresses: could not get public ip for node: %v", node.Name)
+	// Public IP Addresses
+	for _, serverIP := range server.Ips {
+		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeExternalIP, Address: serverIP.Ip})
 	}
 
 	return addresses, nil
