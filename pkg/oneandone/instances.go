@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/1and1/oneandone-cloudserver-sdk-go"
+	"github.com/leroyshirtoFH/oneandone-cloudserver-sdk-go"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	v12 "k8s.io/client-go/kubernetes/typed/core/v1"

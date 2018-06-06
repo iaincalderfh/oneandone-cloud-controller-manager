@@ -9,7 +9,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientset "k8s.io/client-go/kubernetes"
 
-	"github.com/1and1/oneandone-cloudserver-sdk-go"
+	"github.com/leroyshirtoFH/oneandone-cloudserver-sdk-go"
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
