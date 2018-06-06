@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/1and1/oneandone-cloudserver-sdk-go"
+	"github.com/leroyshirtoFH/oneandone-cloudserver-sdk-go"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	v12 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"net/http"
 )
 
 const (
@@ -122,7 +123,26 @@ func (i *instances) CurrentNodeName(ctx context.Context, hostname string) (types
 // InstanceExistsByProviderID returns true if the instance for the given provider id still is running.
 // If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
 func (i *instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
-	return false, errors.New("not implemented")
+	id, err := serverIDFromProviderID(providerID)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = i.client.GetServer(id)
+	if err == nil {
+		return true, nil
+	}
+
+	oneandoneErr, ok := err.(oneandone.ApiError)
+	if !ok {
+		return false, fmt.Errorf("unexpected error type from oneandone api: %T, msg: %v", err, err)
+	}
+
+	if oneandoneErr.HttpStatusCode() != http.StatusNotFound {
+		return false, fmt.Errorf("error checking if instance exists: %v", err)
+	}
+
+	return false, nil
 }
 
 // serverByID returns a *oneandone.Server value for the server identified by id.
@@ -151,7 +171,7 @@ func serverIDFromProviderID(providerID string) (string, error) {
 
 	// since split[0] is actually "oneandone:"
 	if strings.TrimSuffix(split[0], ":") != providerName {
-		return "", fmt.Errorf("Provider name from providerID should be %s: %s", providerName, providerID)
+		return "", fmt.Errorf("provider name from providerID should be %s: %s", providerName, providerID)
 	}
 
 	return split[2], nil

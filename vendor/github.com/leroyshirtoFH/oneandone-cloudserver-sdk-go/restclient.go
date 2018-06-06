@@ -93,7 +93,8 @@ func (c *restClient) doRequest(url string, method string, requestBody interface{
 			if response.StatusCode == http.StatusTooManyRequests {
 				retryAfter := response.Header.Get("X-Rate-Limit-Reset")
 				if retryAfter == "" {
-					return fmt.Errorf("no 'X-Rate-Limit-Reset' has been returned")
+					//let the SDK sleep for 60 seconds while the API send the correct header
+					retryAfter = "60"
 				}
 
 				sleep, err := time.ParseDuration(retryAfter + "s")
@@ -109,7 +110,7 @@ func (c *restClient) doRequest(url string, method string, requestBody interface{
 				if err != nil {
 					return err
 				}
-				return apiError{response.StatusCode, fmt.Sprintf("Type: %s; Message: %s", erResp.Type, erResp.Message)}
+				return ApiError{response.StatusCode, fmt.Sprintf("Type: %s; Message: %s", erResp.Type, erResp.Message)}
 			} else {
 				return c.unmarshal(body, result)
 			}
