@@ -2,15 +2,40 @@
 
 ## Setup and Installation
 
-### Authentication and Configuration
+### Preparing Your Cluster
+Node names must match server names in your cloud panel.  If node names or hostnames do not match, use one of these options:
+ - Set the `--hostname-override` flag on the `kubelet` on **all nodes** in your cluster.
+ - Add the label `stackpoint.io/instance_id` to **all nodes** in your cluster.  The label's value must be the server name.
 
-Create a Kubernetes secret with the following command:
+Your cluster must be configured to use an external cloud-provider.
 
-```bash
-$ kubectl create secret generic oneandone-cloud-controller-manager \
-     -n kube-system                                           \
-     --from-file=cloud-provider.yaml=manifests/cloud-provider-example.yaml
+This involves:
+ - Setting the `--cloud-provider=external` flag on the `kubelet` on **all nodes** in your cluster.
+ - Setting the `--cloud-provider=external` flag on the `kube-controller-manager` in your Kubernetes control plane.
+
+**Depending on how kube-proxy is run you _may_ need the following:**
+
+- Ensuring that `kube-proxy` tolerates the uninitialised cloud taint. The
+  following should appear in the `kube-proxy` pod yaml:
+
+```yaml
+- effect: NoSchedule
+  key: node.cloudprovider.kubernetes.io/uninitialized
+  value: "true"
 ```
 
-Note that you must ensure the secret contains the key `cloud-provider.yaml`
-rather than the name of the file on disk.
+If your cluster was created using `kubeadm` >= v1.7.2 this toleration will
+already be applied. See [kubernetes/kubernetes#49017][5] for details.
+
+Remember to restart any components that you have reconfigured before continuing.
+
+### Authentication and Configuration
+The 1&1 Cloud Controller Manager requires a cloud panel API token and the datacenter code stored in the following environment variables:
+
+ - ONEANDONE_API_KEY
+ - ONEANDONE_INSTANCE_REGION
+
+The default manifest is configured to set these environment variables from a secret named `oneandone`:
+
+kubectl -n kube-system create secret generic oneandone --from-literal=token=`<TOKEN>`
+--from-literal=credentials-datacenter=GB
