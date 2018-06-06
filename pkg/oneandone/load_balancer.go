@@ -27,10 +27,6 @@ const (
 	// to ROUND_ROBIN.
 	oneandoneLoadbalancerMethod = "service.beta.kubernetes.io/oneandone-loadbalancer-method"
 
-	// oneandoneNodeInstanceIdLabel is the label specifying the unique identifier of the node
-	// or server name on the oneandone api.
-	oneandoneNodeInstanceIDLabel = "stackpoint.io/instance_id"
-
 	// defaultActiveCheckTick is the number of seconds between load balancer
 	// status checks when waiting for activation.
 	defaultActiveCheckTick = 5
@@ -325,13 +321,13 @@ func (lb *loadBalancer) buildUpdateLoadBalancerRequest(service *v1.Service) (*on
 	healthCheck := buildHealthCheck(service)
 
 	return &oneandone.LoadBalancerRequest{
-		Name:					lbName,
-		Description:			service.Name,
-		HealthCheckTest:		healthCheck.CheckTest,
-		HealthCheckInterval:	&healthCheck.CheckInterval,
-		Persistence:			&healthCheck.Persistence,
-		PersistenceTime:		&healthCheck.PersistenceTime,
-		Method:					algorithm,
+		Name:                lbName,
+		Description:         service.Name,
+		HealthCheckTest:     healthCheck.CheckTest,
+		HealthCheckInterval: &healthCheck.CheckInterval,
+		Persistence:         &healthCheck.Persistence,
+		PersistenceTime:     &healthCheck.PersistenceTime,
+		Method:              algorithm,
 	}, nil
 }
 
@@ -401,7 +397,7 @@ func loadBalancerHasIP(lbServerIPInfo []oneandone.ServerIpInfo, serverIPID strin
 }
 
 func (lb *loadBalancer) ensureServerIpUpdateUpdateRequired(loadBalancer *oneandone.LoadBalancer, serverIPIDs []string) bool {
-	for _, serverIPID := range serverIPIDs  {
+	for _, serverIPID := range serverIPIDs {
 		if !loadBalancerHasIP(loadBalancer.ServerIps, serverIPID) {
 			return true
 		}
@@ -415,7 +411,7 @@ func loadBalancerHasRule(loadBalancerRules []oneandone.LoadBalancerRule, service
 		hasSameProtocol := string(rule.Protocol) == string(servicePort.Protocol)
 		hasSameInternalPort := string(rule.PortServer) == string(servicePort.NodePort)
 		hasSameExternalPort := string(rule.PortBalancer) == string(servicePort.Port)
-		if  hasSameProtocol && hasSameInternalPort &&  hasSameExternalPort{
+		if hasSameProtocol && hasSameInternalPort && hasSameExternalPort {
 			return true
 		}
 	}
@@ -428,7 +424,7 @@ func serviceHasPort(existingServicePorts []v1.ServicePort, lbRule oneandone.Load
 		hasSameProtocol := string(lbRule.Protocol) == string(port.Protocol)
 		hasSameInternalPort := string(lbRule.PortServer) == string(port.NodePort)
 		hasSameExternalPort := string(lbRule.PortBalancer) == string(port.Port)
-		if  hasSameProtocol && hasSameInternalPort &&  hasSameExternalPort{
+		if hasSameProtocol && hasSameInternalPort && hasSameExternalPort {
 			return true
 		}
 	}
@@ -437,7 +433,7 @@ func serviceHasPort(existingServicePorts []v1.ServicePort, lbRule oneandone.Load
 }
 
 func (lb *loadBalancer) ruleUpdateRequired(loadBalancer *oneandone.LoadBalancer, service *v1.Service) bool {
-	for _, port := range service.Spec.Ports  {
+	for _, port := range service.Spec.Ports {
 		if !loadBalancerHasRule(loadBalancer.Rules, port) {
 			return true
 		}

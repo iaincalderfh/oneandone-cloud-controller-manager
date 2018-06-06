@@ -12,6 +12,12 @@ import (
 	v12 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
+const (
+	// oneandoneNodeInstanceIdLabel is the label specifying the unique identifier of the node
+	// or server name on the oneandone api.
+	oneandoneNodeInstanceIDLabel = "stackpoint.io/instance_id"
+)
+
 type instances struct {
 	client       *oneandone.API
 	region       string
