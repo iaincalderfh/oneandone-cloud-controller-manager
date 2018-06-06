@@ -171,7 +171,7 @@ func serverIDFromProviderID(providerID string) (string, error) {
 
 	// since split[0] is actually "oneandone:"
 	if strings.TrimSuffix(split[0], ":") != providerName {
-		return "", fmt.Errorf("Provider name from providerID should be %s: %s", providerName, providerID)
+		return "", fmt.Errorf("provider name from providerID should be %s: %s", providerName, providerID)
 	}
 
 	return split[2], nil
