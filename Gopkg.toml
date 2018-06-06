@@ -32,10 +32,6 @@
   branch = "release-1.10"
   name = "k8s.io/apiextensions-apiserver"
 
-[[override]]
-  revision = "50ae88d24ede7b8bad68e23c805b5d3da5c8abaf"
-  name = "k8s.io/kube-openapi"
-
 [[constraint]]
   branch = "master"
   name = "github.com/golang/glog"
