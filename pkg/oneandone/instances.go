@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	"net/http"
+
 	"github.com/leroyshirtoFH/oneandone-cloudserver-sdk-go"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	v12 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"net/http"
 )
 
 const (
@@ -157,7 +158,7 @@ func (i *instances) serverByID(id string) (*oneandone.Server, error) {
 
 // serverIDFromProviderID returns a server's ID from providerID.
 //
-// The providerID spec should be retrievable from the Kubernetes
+// The providerID spec should be retrievable from the
 // node object. The expected format is: oneandone://server-id
 func serverIDFromProviderID(providerID string) (string, error) {
 	if providerID == "" {

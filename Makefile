@@ -6,6 +6,14 @@ VERSION ?= ${BUILD}
 .PHONY: all
 all: test build
 
+.PHONY: govet
+govet:
+	go vet $(shell go list ./... | grep -v vendor)
+
+.PHONY: golint
+golint:
+	golint $(shell go list ./... | grep -v vendor)
+
 .PHONY: test
 test:
 	@go test ./pkg/oneandone

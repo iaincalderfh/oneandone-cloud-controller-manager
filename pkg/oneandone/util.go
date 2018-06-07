@@ -4,12 +4,13 @@ import (
 	"errors"
 	"fmt"
 
+	"net"
+
 	"github.com/leroyshirtoFH/oneandone-cloudserver-sdk-go"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	v12 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"net"
 )
 
 func serverFromNode(node *v1.Node, client *oneandone.API) (*oneandone.Server, error) {

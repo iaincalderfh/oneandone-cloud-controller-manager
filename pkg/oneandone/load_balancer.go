@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/leroyshirtoFH/oneandone-cloudserver-sdk-go"
 	"github.com/golang/glog"
+	"github.com/leroyshirtoFH/oneandone-cloudserver-sdk-go"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 )
@@ -166,7 +166,7 @@ func (lb *loadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName stri
 		return err
 	}
 
-	if lb.ensureServerIpUpdateUpdateRequired(loadBalancer, serverIPIDs) {
+	if lb.ensureServerIPUpdateUpdateRequired(loadBalancer, serverIPIDs) {
 		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer server ip update required", service.Name)
 		serverIPIPsToAdd := findServerIPIDsToAdd(loadBalancer.ServerIps, serverIPIDs)
 		if len(serverIPIDs) > 0 {
@@ -396,7 +396,7 @@ func loadBalancerHasIP(lbServerIPInfo []oneandone.ServerIpInfo, serverIPID strin
 	return false
 }
 
-func (lb *loadBalancer) ensureServerIpUpdateUpdateRequired(loadBalancer *oneandone.LoadBalancer, serverIPIDs []string) bool {
+func (lb *loadBalancer) ensureServerIPUpdateUpdateRequired(loadBalancer *oneandone.LoadBalancer, serverIPIDs []string) bool {
 	for _, serverIPID := range serverIPIDs {
 		if !loadBalancerHasIP(loadBalancer.ServerIps, serverIPID) {
 			return true
