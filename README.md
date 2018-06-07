@@ -20,9 +20,18 @@ This involves:
 - Setting the `--cloud-provider=external` flag on the `kubelet` on **all nodes** in your cluster.
 - Setting the `--cloud-provider=external` flag on the `kube-controller-manager` in your Kubernetes control plane.
 
+**If you are running flannel, ensure that kube-flannel tolerates the uninitialised cloud taint:**
+- The following should appear in the `kube-flannel` daemonset:
+
+```yaml
+- effect: NoSchedule
+  key: node.cloudprovider.kubernetes.io/uninitialized
+  value: "true"
+```
+
 **Depending on how kube-proxy is run you _may_ need the following:**
 
-- Ensuring that `kube-proxy` tolerates the uninitialised cloud taint. The
+- Ensure that `kube-proxy` tolerates the uninitialised cloud taint. The
   following should appear in the `kube-proxy` pod yaml:
 
 ```yaml

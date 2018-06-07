@@ -9,7 +9,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientset "k8s.io/client-go/kubernetes"
 
-	"github.com/golang/glog"
 	"github.com/leroyshirtoFH/oneandone-cloudserver-sdk-go"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
@@ -43,6 +42,24 @@ type cloudProvider struct {
 }
 
 func newCloudProvider(config *config) (cloudprovider.Interface, error) {
+	apiClient, err := newOneAndOneAPIClient()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create oneandone API client: %s", err)
+	}
+
+	region := os.Getenv(oneInstanceRegionEnv)
+	if region == "" {
+		return nil, fmt.Errorf("Environment variable %q is required", oneInstanceRegionEnv)
+	}
+
+	return &cloudProvider{
+		client:       apiClient,
+		loadbalancer: newLoadbalancer(apiClient, region),
+		instances:    newInstances(apiClient, region),
+	}, nil
+}
+
+func newOneAndOneAPIClient() (*oneandone.API, error) {
 	token := oneandone.SetToken(os.Getenv(oneAPITokenEnv))
 	if token == "" {
 		return nil, fmt.Errorf("Environment variable %q is required", oneAPITokenEnv)
@@ -58,22 +75,12 @@ func newCloudProvider(config *config) (cloudprovider.Interface, error) {
 		return nil, fmt.Errorf("Failed to create oneandone api client")
 	}
 
-	region := os.Getenv(oneInstanceRegionEnv)
-	if region == "" {
-		return nil, fmt.Errorf("Environment variable %q is required", oneInstanceRegionEnv)
-	}
-
-	return &cloudProvider{
-		client:       apiClient,
-		loadbalancer: newLoadbalancer(apiClient, region),
-		instances:    newInstances(apiClient, region),
-	}, nil
+	return apiClient, nil
 }
 
 // Initialize implements cloudprovider.Interface.Initialize
 // A Kubernetes client is obtained from the clientBuilder.
 func (cp *cloudProvider) Initialize(clientBuilder controller.ControllerClientBuilder) {
-	glog.V(1).Infof("%s CloudProvider: Intialize called", providerName)
 	var err error
 	cp.kubeclient, err = clientBuilder.Client("cloud-controller-manager")
 	if err != nil {
