@@ -14,8 +14,8 @@ import (
 	_ "k8s.io/kubernetes/pkg/client/metrics/prometheus" // for client metric registration
 	_ "k8s.io/kubernetes/pkg/version/prometheus"        // for version metric registration
 
-	"github.com/spf13/pflag"
 	_ "github.com/iaincalderfh/oneandone-cloud-controller-manager/pkg/oneandone"
+	"github.com/spf13/pflag"
 )
 
 var version string
@@ -31,6 +31,7 @@ func main() {
 	// normalize func and add the go flag set by hand.
 	pflag.CommandLine.SetNormalizeFunc(utilflag.WordSepNormalizeFunc)
 	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+	goflag.CommandLine.Parse([]string{})
 	// utilflag.InitFlags()
 	logs.InitLogs()
 	defer logs.FlushLogs()
