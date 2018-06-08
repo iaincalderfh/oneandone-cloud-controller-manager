@@ -30,7 +30,7 @@ func newInstances(client *oneandone.API, region string) *instances {
 	return &instances{client, region, nil}
 }
 
-// NodeAddresses returns all the valid addresses of the droplet identified by
+// NodeAddresses returns all the valid addresses of the server identified by
 // nodeName. Only the public/private IPv4 addresses are considered for now.
 //
 // When nodeName identifies more than one server, only the first will be
