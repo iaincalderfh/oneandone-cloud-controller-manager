@@ -26,38 +26,38 @@ func serverFromNode(node *v1.Node, client *oneandone.API) (*oneandone.Server, er
 
 	// Get Server by node public IPs
 	externalAddresses := getNodeAddressesByType(node, v1.NodeExternalIP)
-	server, err = serverFromNodeExternalIPs(externalAddresses, client)
+	server, err = serverFromExternalIPs(externalAddresses, client)
 	if err == nil && server != nil {
 		return server, nil
 	}
 
-	return nil, fmt.Errorf("serverFromNode: Error looking up server for node: %s", node.Name)
+	return nil, fmt.Errorf("serverFromNode: Unable to find server for node '%s'", node.Name)
 }
 
 func serverFromName(serverName string, client *oneandone.API) (*oneandone.Server, error) {
 	servers, err := client.ListServers(0, 0, "", serverName, "id,name")
 	if err != nil {
-		return nil, fmt.Errorf("serverFromName: Error looking up servers for matching: %s", serverName)
+		return nil, fmt.Errorf("serverFromName: Error looking up servers matching '%s': %s", serverName, err)
 	}
 
 	for _, server := range servers {
 		if serverName == server.Name {
 			fullServer, err := client.GetServer(server.Id)
 			if err != nil {
-				return nil, fmt.Errorf("serverFromName: Error looking up server by id: %s", server.Id)
+				return nil, fmt.Errorf("serverFromName: Error looking up server by id '%s': %s", server.Id, err)
 			}
 			return fullServer, nil
 		}
 	}
 
-	return nil, fmt.Errorf("serverFromName: Error Server with name: %s NOT_FOUND", serverName)
+	return nil, fmt.Errorf("serverFromName: Server with name '%s' NOT_FOUND", serverName)
 }
 
-func serverFromNodeExternalIPs(externalAddresses []v1.NodeAddress, client *oneandone.API) (*oneandone.Server, error) {
+func serverFromExternalIPs(externalAddresses []v1.NodeAddress, client *oneandone.API) (*oneandone.Server, error) {
 	for _, address := range externalAddresses {
 		servers, err := client.ListServers(0, 0, "", address.Address, "id,ips")
 		if err != nil {
-			return nil, fmt.Errorf("serverFromNodeExternalIPs: Error looking up servers for matching: %s", address.Address)
+			return nil, fmt.Errorf("serverFromExternalIPs: Error looking up servers matching '%s': %s", address.Address, err)
 		}
 
 		for _, server := range servers {
@@ -65,7 +65,7 @@ func serverFromNodeExternalIPs(externalAddresses []v1.NodeAddress, client *onean
 				if address.Address == ip.Ip {
 					fullServer, err := client.GetServer(server.Id)
 					if err != nil {
-						return nil, fmt.Errorf("serverFromNodeExternalIPs: Error looking up server by ip: %s", server.Id)
+						return nil, fmt.Errorf("serverFromExternalIPs: Error looking up server by ip '%s': %s", server.Id, err)
 					}
 					return fullServer, nil
 				}
@@ -73,7 +73,7 @@ func serverFromNodeExternalIPs(externalAddresses []v1.NodeAddress, client *onean
 		}
 	}
 
-	return nil, fmt.Errorf("serverFromNodeExternalIPs: Error NO Servers matching public has been found: ips: %s", externalAddresses)
+	return nil, fmt.Errorf("serverFromExternalIPs: No Servers matching public addresses %v", externalAddresses)
 }
 
 func nodeFromName(nodeName types.NodeName, kubeClient v12.NodeInterface) (*v1.Node, error) {
@@ -83,7 +83,7 @@ func nodeFromName(nodeName types.NodeName, kubeClient v12.NodeInterface) (*v1.No
 
 	node, err := kubeClient.Get(string(nodeName), metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("nodeFromName: kubeClient error getting node by name: %s, error:%s", nodeName, err)
+		return nil, fmt.Errorf("nodeFromName: kubeClient error getting node by name '%s': %s", nodeName, err)
 	}
 
 	return node, nil
@@ -104,9 +104,8 @@ func serverFromNodeName(nodeName types.NodeName, client *oneandone.API, kubeClie
 }
 
 // nodeAddresses returns a []v1.NodeAddress from server.
-func nodeAddresses(server *oneandone.Server, node *v1.Node) ([]v1.NodeAddress, error) {
-	var addresses []v1.NodeAddress
-	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeHostName, Address: node.Name})
+func nodeAddresses(server *oneandone.Server, node *v1.Node) []v1.NodeAddress {
+	addresses := []v1.NodeAddress{v1.NodeAddress{Type: v1.NodeHostName, Address: node.Name}}
 
 	// Private IP Addresses
 	for _, privateNetwork := range server.PrivateNets {
@@ -118,7 +117,7 @@ func nodeAddresses(server *oneandone.Server, node *v1.Node) ([]v1.NodeAddress, e
 		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeExternalIP, Address: serverIP.Ip})
 	}
 
-	return addresses, nil
+	return addresses
 }
 
 func getNodeAddressesByType(node *v1.Node, addressType v1.NodeAddressType) []v1.NodeAddress {

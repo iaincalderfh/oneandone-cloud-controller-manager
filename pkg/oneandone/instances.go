@@ -30,11 +30,9 @@ func newInstances(client *oneandone.API, region string) *instances {
 	return &instances{client, region, nil}
 }
 
-// NodeAddresses returns all the valid addresses of the server identified by
-// nodeName. Only the public/private IPv4 addresses are considered for now.
-//
-// When nodeName identifies more than one server, only the first will be
-// considered.
+// NodeAddresses implements cloudprovider.Instances.NodeAddresses.
+// Returns: all the valid addresses of the server identified by nodeName.
+// Only the public/private IPv4 addresses are considered for now.
 func (i *instances) NodeAddresses(ctx context.Context, nodeName types.NodeName) ([]v1.NodeAddress, error) {
 	node, err := nodeFromName(nodeName, i.kubeNodesAPI)
 	if err != nil {
@@ -46,16 +44,17 @@ func (i *instances) NodeAddresses(ctx context.Context, nodeName types.NodeName) 
 		return nil, err
 	}
 
-	return nodeAddresses(server, node)
+	return nodeAddresses(server, node), nil
 }
 
+// NodeAddressesByProviderID implements cloudprovider.Instances.NodeAddressesByProviderID.
 func (i *instances) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
 	id, err := serverIDFromProviderID(providerID)
 	if err != nil {
 		return nil, err
 	}
 
-	server, err := i.serverByID(id)
+	server, err := i.client.GetServer(id)
 	if err != nil {
 		return nil, err
 	}
@@ -65,16 +64,18 @@ func (i *instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 		return nil, err
 	}
 
-	return nodeAddresses(server, node)
+	return nodeAddresses(server, node), nil
 }
 
-// ExternalID returns the cloud provider ID of the node with the specified NodeName.
+// ExternalID implements cloudprovider.Instances.ExternalID.
+// Returns: the cloud provider ID of the node with the specified NodeName.
 // Note that if the instance does not exist or is no longer running, we must return ("", cloudprovider.InstanceNotFound)
 func (i *instances) ExternalID(ctx context.Context, nodeName types.NodeName) (string, error) {
 	return i.InstanceID(ctx, nodeName)
 }
 
-// InstanceID returns the cloud provider ID of the node with the specified NodeName.
+// InstanceID implements cloudprovider.Instances.InstanceID.
+// Returns: the cloud provider ID of the node with the specified NodeName.
 func (i *instances) InstanceID(ctx context.Context, nodeName types.NodeName) (string, error) {
 	server, err := serverFromNodeName(nodeName, i.client, i.kubeNodesAPI)
 	if err != nil {
@@ -84,7 +85,8 @@ func (i *instances) InstanceID(ctx context.Context, nodeName types.NodeName) (st
 	return server.Id, nil
 }
 
-// InstanceType returns the type of the specified instance.
+// InstanceType implements cloudprovider.Instances.InstanceType.
+// Returns: the type of the specified instance.
 func (i *instances) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
 	server, err := serverFromNodeName(name, i.client, i.kubeNodesAPI)
 	if err != nil {
@@ -94,14 +96,15 @@ func (i *instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 	return server.ServerType, nil
 }
 
-// InstanceTypeByProviderID returns the type of the specified instance.
+// InstanceTypeByProviderID implements cloudprovider.Instances.InstanceTypeByProviderID.
+// Returns: the type of the specified instance.
 func (i *instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	id, err := serverIDFromProviderID(providerID)
 	if err != nil {
 		return "", err
 	}
 
-	server, err := i.serverByID(id)
+	server, err := i.client.GetServer(id)
 	if err != nil {
 		return "", err
 	}
@@ -109,19 +112,22 @@ func (i *instances) InstanceTypeByProviderID(ctx context.Context, providerID str
 	return server.ServerType, nil
 }
 
+// AddSSHKeyToAllInstances implements cloudprovider.Instances.AddSSHKeyToAllInstances.
 // AddSSHKeyToAllInstances adds an SSH public key as a legal identity for all instances
 // expected format for the key is standard ssh-keygen format: <protocol> <blob>
 func (i *instances) AddSSHKeyToAllInstances(ctx context.Context, user string, keyData []byte) error {
 	return errors.New("not implemented")
 }
 
-// CurrentNodeName returns the name of the node we are currently running on
+// CurrentNodeName implements cloudprovider.Instances.CurrentNodeName.
+// Returns: the name of the node we are currently running on.
 // On most clouds (e.g. GCE) this is the hostname, so we provide the hostname
 func (i *instances) CurrentNodeName(ctx context.Context, hostname string) (types.NodeName, error) {
 	return types.NodeName(hostname), nil
 }
 
-// InstanceExistsByProviderID returns true if the instance for the given provider id still is running.
+// InstanceExistsByProviderID implements cloudprovider.Instances.InstanceExistsByProviderID.
+// Returns: true if the instance for the given provider id still is running.
 // If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
 func (i *instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	id, err := serverIDFromProviderID(providerID)
@@ -144,16 +150,6 @@ func (i *instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	}
 
 	return false, nil
-}
-
-// serverByID returns a *oneandone.Server value for the server identified by id.
-func (i *instances) serverByID(id string) (*oneandone.Server, error) {
-	server, err := i.client.GetServer(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return server, nil
 }
 
 // serverIDFromProviderID returns a server's ID from providerID.

@@ -13,11 +13,6 @@ import (
 )
 
 const (
-	// oneandoneLoadbalancerProtocol is the annotation used to specify the default protocol
-	// for oneandone load balancers. For ports specified in annDOTLSPorts, this protocol
-	// is overwritten to https. Options are tcp, http and https. Defaults to tcp.
-	oneandoneLoadbalancerProtocol = "service.beta.kubernetes.io/oneandone-loadbalancer-protocol"
-
 	// defaultActiveTimeout is the number of seconds to wait for a load balancer to
 	// reach the active state.
 	defaultActiveTimeout = 90
@@ -37,9 +32,6 @@ const (
 
 var errLBNotFound = errors.New("loadbalancer not found")
 
-// Compile-time check that loadBalancer implements cloudprovider. LoadBalancer
-var _ cloudprovider.LoadBalancer = &loadBalancer{}
-
 type loadBalancer struct {
 	client            *oneandone.API
 	region            string
@@ -48,12 +40,12 @@ type loadBalancer struct {
 }
 
 type healthCheck struct {
-	CheckTest       string
-	CheckInterval   int
-	CheckPath       string
-	CheckPathParser string
-	Persistence     bool
-	PersistenceTime int
+	checkTest       string
+	checkInterval   int
+	checkPath       string
+	checkPathParser string
+	persistence     bool
+	persistenceTime int
 }
 
 // newLoadbalancers returns a cloudprovider.LoadBalancer whose concrete type is a *loadbalancer.
@@ -61,8 +53,8 @@ func newLoadbalancer(client *oneandone.API, region string) cloudprovider.LoadBal
 	return &loadBalancer{client, region, defaultActiveTimeout, defaultActiveCheckTick}
 }
 
-// GetLoadBalancer returns the *v1.LoadBalancerStatus of service.
-//
+// GetLoadBalancer implements cloudprovider.LoadBalancer.GetLoadBalancer.
+// Returns: *v1.LoadBalancerStatus for service.
 // GetLoadBalancer will not modify service.
 func (lb *loadBalancer) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	glog.V(1).Infof("GetLoadBalancer: service=%s", service.Name)
@@ -80,7 +72,7 @@ func (lb *loadBalancer) GetLoadBalancer(ctx context.Context, clusterName string,
 	if loadBalancer.State != lbStatusActive {
 		err = lb.client.WaitForState(loadBalancer, lbStatusActive, 10, 60)
 		if err != nil {
-			return nil, true, fmt.Errorf("error waiting for load balancer to be active %v", err)
+			return nil, true, fmt.Errorf("GetLoadBalancer: error waiting for load balancer to be active: %s", err)
 		}
 	}
 
@@ -93,9 +85,8 @@ func (lb *loadBalancer) GetLoadBalancer(ctx context.Context, clusterName string,
 	}, true, nil
 }
 
-// EnsureLoadBalancer ensures that the cluster is running a load balancer for
-// service.
-//
+// EnsureLoadBalancer implements cloudprovider.LoadBalancer.EnsureLoadBalancer.
+// Ensures that the cluster is running a load balancer for service.
 // EnsureLoadBalancer will not modify service or nodes
 func (lb *loadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	glog.V(1).Infof("EnsureLoadBalancer: service=%s", service.Name)
@@ -120,18 +111,6 @@ func (lb *loadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName stri
 		if err != nil {
 			return nil, err
 		}
-
-		err = lb.UpdateLoadBalancer(ctx, clusterName, service, nodes)
-		if err != nil {
-			return nil, err
-		}
-
-		lbStatus, exists, err = lb.GetLoadBalancer(ctx, clusterName, service)
-		if err != nil {
-			return nil, err
-		}
-
-		return lbStatus, nil
 	}
 
 	err = lb.UpdateLoadBalancer(ctx, clusterName, service, nodes)
@@ -148,12 +127,11 @@ func (lb *loadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName stri
 
 }
 
-// UpdateLoadBalancer updates the load balancer for service to balance across
-// the servers in nodes.
-//
+// UpdateLoadBalancer implements cloudprovider.LoadBalancer.UpdateLoadBalancer.
+// Updates the load balancer for service to balance across nodes.
 // UpdateLoadBalancer will not modify service or nodes.
 func (lb *loadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
-	glog.V(1).Infof("UpdateLoadBalancer: service=%s", service.Name)
+	glog.V(1).Infof("UpdateLoadBalancer: service='%s'", service.Name)
 
 	lbName := cloudprovider.GetLoadBalancerName(service)
 	loadBalancer, err := lb.lbByName(ctx, lbName)
@@ -161,13 +139,10 @@ func (lb *loadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName stri
 		return err
 	}
 
-	serverIPIDs, err := lb.nodesToServerIPIDs(nodes)
-	if err != nil {
-		return err
-	}
+	serverIPIDs := lb.nodesToServerIPIDs(nodes)
 
-	if lb.ensureServerIPUpdateUpdateRequired(loadBalancer, serverIPIDs) {
-		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer server ip update required", service.Name)
+	if lb.serverIPUpdateRequired(loadBalancer, serverIPIDs) {
+		glog.V(1).Infof("UpdateLoadBalancer: Loadbalancer server ip update required for service '%s'", service.Name)
 		serverIPIPsToAdd := findServerIPIDsToAdd(loadBalancer.ServerIps, serverIPIDs)
 		if len(serverIPIDs) > 0 {
 			loadBalancer, err = lb.client.AddLoadBalancerServerIps(loadBalancer.Id, serverIPIPsToAdd)
@@ -181,7 +156,7 @@ func (lb *loadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName stri
 			}
 		}
 	} else {
-		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer server ip update NOT required", service.Name)
+		glog.V(1).Infof("UpdateLoadBalancer: Loadbalancer server ip update NOT required for service '%s'", service.Name)
 	}
 
 	if lb.loadBalancerUpdateRequired(loadBalancer, service) {
@@ -189,14 +164,20 @@ func (lb *loadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName stri
 		if err != nil {
 			return err
 		}
+
 		loadBalancer, err = lb.client.UpdateLoadBalancer(loadBalancer.Id, lbRequest)
+		if err != nil {
+			return err
+		}
+
+		err = lb.client.WaitForState(loadBalancer, lbStatusActive, 30, 60)
 		if err != nil {
 			return err
 		}
 	}
 
 	if lb.ruleUpdateRequired(loadBalancer, service) {
-		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer rules update required", service.Name)
+		glog.V(1).Infof("UpdateLoadBalancer: Loadbalancer rules update required for service '%s'", service.Name)
 
 		rulesToAdd := lb.findRulesToAdd(loadBalancer.Rules, service.Spec.Ports)
 		if len(rulesToAdd) > 0 {
@@ -226,32 +207,25 @@ func (lb *loadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName stri
 			}
 		}
 	} else {
-		glog.V(1).Infof("UpdateLoadBalancer: service=%s Loadbalancer rules update NOT required", service.Name)
+		glog.V(1).Infof("UpdateLoadBalancer: Loadbalancer rules update NOT required for service '%s'", service.Name)
 	}
 
 	return nil
 }
 
-// EnsureLoadBalancerDeleted deletes the specified loadbalancer if it exists.
-// nil is returned if the load balancer for service does not exist or is
-// successfully deleted.
-//
+// EnsureLoadBalancerDeleted implements cloudprovider.LoadBalancer.EnsureLoadBalancerDeleted.
+// Deletes the specified loadbalancer if it exists.
+// nil is returned if the load balancer for service does not exist or is successfully deleted.
 // EnsureLoadBalancerDeleted will not modify service.
 func (lb *loadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
-	glog.V(1).Infof("EnsureLoadBalancerDeleted: service=%s", service.Name)
-	_, exists, err := lb.GetLoadBalancer(ctx, clusterName, service)
-	if err != nil {
-		return err
-	}
-
-	if !exists {
-		return nil
-	}
+	glog.V(1).Infof("EnsureLoadBalancerDeleted: service='%s'", service.Name)
 
 	lbName := cloudprovider.GetLoadBalancerName(service)
-
 	loadBalancer, err := lb.lbByName(ctx, lbName)
 	if err != nil {
+		if err == errLBNotFound {
+			return nil
+		}
 		return err
 	}
 
@@ -263,13 +237,13 @@ func (lb *loadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 // oneandoneNodeInstanceIdLabel on a node.
 //
 // oneandoneNodeInstanceIdLabel on nodes are assumed to match oneandone server names.
-func (lb *loadBalancer) nodesToServerIPIDs(nodes []*v1.Node) ([]string, error) {
+func (lb *loadBalancer) nodesToServerIPIDs(nodes []*v1.Node) []string {
 	var serverIPIDs []string
 
 	for _, node := range nodes {
 		server, err := serverFromNode(node, lb.client)
 		if err != nil {
-			glog.V(1).Infof("nodesToServerIDs: Error looking up servers for matching: %s", node.Name)
+			glog.V(1).Infof("nodesToServerIPIDs: Error looking up servers matching '%s': %s", node.Name, err)
 			break
 		}
 
@@ -278,7 +252,7 @@ func (lb *loadBalancer) nodesToServerIPIDs(nodes []*v1.Node) ([]string, error) {
 		}
 	}
 
-	return serverIPIDs, nil
+	return serverIPIDs
 }
 
 // buildCreateLoadBalancerRequest returns a *oneandone.LoadBalancerRequest to balance
@@ -303,10 +277,10 @@ func (lb *loadBalancer) buildCreateLoadBalancerRequest(service *v1.Service) (*on
 	return &oneandone.LoadBalancerRequest{
 		Name:                lbName,
 		Description:         service.Name,
-		HealthCheckTest:     healthCheck.CheckTest,
-		HealthCheckInterval: &healthCheck.CheckInterval,
-		Persistence:         &healthCheck.Persistence,
-		PersistenceTime:     &healthCheck.PersistenceTime,
+		HealthCheckTest:     healthCheck.checkTest,
+		HealthCheckInterval: &healthCheck.checkInterval,
+		Persistence:         &healthCheck.persistence,
+		PersistenceTime:     &healthCheck.persistenceTime,
 		DatacenterId:        regionID,
 		Method:              algorithm,
 		Rules:               forwardingRules,
@@ -323,10 +297,10 @@ func (lb *loadBalancer) buildUpdateLoadBalancerRequest(service *v1.Service) (*on
 	return &oneandone.LoadBalancerRequest{
 		Name:                lbName,
 		Description:         service.Name,
-		HealthCheckTest:     healthCheck.CheckTest,
-		HealthCheckInterval: &healthCheck.CheckInterval,
-		Persistence:         &healthCheck.Persistence,
-		PersistenceTime:     &healthCheck.PersistenceTime,
+		HealthCheckTest:     healthCheck.checkTest,
+		HealthCheckInterval: &healthCheck.checkInterval,
+		Persistence:         &healthCheck.persistence,
+		PersistenceTime:     &healthCheck.persistenceTime,
 		Method:              algorithm,
 	}, nil
 }
@@ -343,17 +317,17 @@ func (lb *loadBalancer) getIDForRegion(regionCode string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("getIdForRegion: Cloud not find dataceenter with country_code: %s", regionCode)
+	return "", fmt.Errorf("getIdForRegion: Could not find datacenter with country_code '%s'", regionCode)
 }
 
 // buildHealthCheck returns a *HealthCheck helper object which is used for loadbalancer
 // creation requests TODO: Get these from service annotations
 func buildHealthCheck(service *v1.Service) *healthCheck {
 	return &healthCheck{
-		CheckTest:       "ICMP",
-		CheckInterval:   15,
-		Persistence:     true,
-		PersistenceTime: 1200,
+		checkTest:       "ICMP",
+		checkInterval:   15,
+		persistence:     true,
+		persistenceTime: 1200,
 	}
 }
 
@@ -387,8 +361,8 @@ func (lb *loadBalancer) lbByName(ctx context.Context, name string) (*oneandone.L
 	return nil, errLBNotFound
 }
 
-func loadBalancerHasIP(lbServerIPInfo []oneandone.ServerIpInfo, serverIPID string) bool {
-	for _, serverIPInfo := range lbServerIPInfo {
+func loadBalancerServerIPsContains(lbServerIPs []oneandone.ServerIpInfo, serverIPID string) bool {
+	for _, serverIPInfo := range lbServerIPs {
 		if serverIPInfo.Id == serverIPID {
 			return true
 		}
@@ -396,9 +370,9 @@ func loadBalancerHasIP(lbServerIPInfo []oneandone.ServerIpInfo, serverIPID strin
 	return false
 }
 
-func (lb *loadBalancer) ensureServerIPUpdateUpdateRequired(loadBalancer *oneandone.LoadBalancer, serverIPIDs []string) bool {
+func (lb *loadBalancer) serverIPUpdateRequired(loadBalancer *oneandone.LoadBalancer, serverIPIDs []string) bool {
 	for _, serverIPID := range serverIPIDs {
-		if !loadBalancerHasIP(loadBalancer.ServerIps, serverIPID) {
+		if !loadBalancerServerIPsContains(loadBalancer.ServerIps, serverIPID) {
 			return true
 		}
 	}
@@ -406,11 +380,11 @@ func (lb *loadBalancer) ensureServerIPUpdateUpdateRequired(loadBalancer *oneando
 	return false
 }
 
-func loadBalancerHasRule(loadBalancerRules []oneandone.LoadBalancerRule, servicePort v1.ServicePort) bool {
+func loadBalancerRulesContains(loadBalancerRules []oneandone.LoadBalancerRule, servicePort v1.ServicePort) bool {
 	for _, rule := range loadBalancerRules {
-		hasSameProtocol := string(rule.Protocol) == string(servicePort.Protocol)
-		hasSameInternalPort := string(rule.PortServer) == string(servicePort.NodePort)
-		hasSameExternalPort := string(rule.PortBalancer) == string(servicePort.Port)
+		hasSameProtocol := rule.Protocol == string(servicePort.Protocol)
+		hasSameInternalPort := rule.PortServer == uint16(servicePort.NodePort)
+		hasSameExternalPort := rule.PortBalancer == uint16(servicePort.Port)
 		if hasSameProtocol && hasSameInternalPort && hasSameExternalPort {
 			return true
 		}
@@ -419,11 +393,11 @@ func loadBalancerHasRule(loadBalancerRules []oneandone.LoadBalancerRule, service
 	return false
 }
 
-func serviceHasPort(existingServicePorts []v1.ServicePort, lbRule oneandone.LoadBalancerRule) bool {
+func servicePortsContains(existingServicePorts []v1.ServicePort, lbRule oneandone.LoadBalancerRule) bool {
 	for _, port := range existingServicePorts {
-		hasSameProtocol := string(lbRule.Protocol) == string(port.Protocol)
-		hasSameInternalPort := string(lbRule.PortServer) == string(port.NodePort)
-		hasSameExternalPort := string(lbRule.PortBalancer) == string(port.Port)
+		hasSameProtocol := lbRule.Protocol == string(port.Protocol)
+		hasSameInternalPort := lbRule.PortServer == uint16(port.NodePort)
+		hasSameExternalPort := lbRule.PortBalancer == uint16(port.Port)
 		if hasSameProtocol && hasSameInternalPort && hasSameExternalPort {
 			return true
 		}
@@ -434,7 +408,7 @@ func serviceHasPort(existingServicePorts []v1.ServicePort, lbRule oneandone.Load
 
 func (lb *loadBalancer) ruleUpdateRequired(loadBalancer *oneandone.LoadBalancer, service *v1.Service) bool {
 	for _, port := range service.Spec.Ports {
-		if !loadBalancerHasRule(loadBalancer.Rules, port) {
+		if !loadBalancerRulesContains(loadBalancer.Rules, port) {
 			return true
 		}
 	}
@@ -445,7 +419,7 @@ func (lb *loadBalancer) ruleUpdateRequired(loadBalancer *oneandone.LoadBalancer,
 func (lb *loadBalancer) findRulesToAdd(existingRules []oneandone.LoadBalancerRule, requiredServicePorts []v1.ServicePort) []oneandone.LoadBalancerRule {
 	var rulesToAdd []oneandone.LoadBalancerRule
 	for _, port := range requiredServicePorts {
-		if !loadBalancerHasRule(existingRules, port) {
+		if !loadBalancerRulesContains(existingRules, port) {
 			rulesToAdd = append(rulesToAdd, buildRuleFromServicePort(port))
 		}
 	}
@@ -456,7 +430,7 @@ func (lb *loadBalancer) findRulesToAdd(existingRules []oneandone.LoadBalancerRul
 func (lb *loadBalancer) findRulesToRemove(existingRules []oneandone.LoadBalancerRule, requiredServicePorts []v1.ServicePort) []oneandone.LoadBalancerRule {
 	var rulesToRemove []oneandone.LoadBalancerRule
 	for _, lbRule := range existingRules {
-		if !serviceHasPort(requiredServicePorts, lbRule) {
+		if !servicePortsContains(requiredServicePorts, lbRule) {
 			rulesToRemove = append(rulesToRemove, lbRule)
 		}
 	}
@@ -467,7 +441,7 @@ func (lb *loadBalancer) findRulesToRemove(existingRules []oneandone.LoadBalancer
 func findServerIPIDsToAdd(existingServerIPs []oneandone.ServerIpInfo, requiredServerIPIDs []string) []string {
 	var serverIPIDsToAdd []string
 	for _, requiredServerIPID := range requiredServerIPIDs {
-		if !loadBalancerHasIP(existingServerIPs, requiredServerIPID) {
+		if !loadBalancerServerIPsContains(existingServerIPs, requiredServerIPID) {
 			serverIPIDsToAdd = append(serverIPIDsToAdd, requiredServerIPID)
 		}
 	}

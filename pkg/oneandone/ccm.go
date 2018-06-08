@@ -31,9 +31,6 @@ func init() {
 	})
 }
 
-// Compile-time check that CloudProvider implements cloudprovider.Interface
-var _ cloudprovider.Interface = &cloudProvider{}
-
 type cloudProvider struct {
 	client       *oneandone.API
 	kubeclient   clientset.Interface
