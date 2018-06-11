@@ -45,7 +45,7 @@ spec:
           - "--allow-untagged-cloud"
         resources:
           requests:
-            cpu: 100m
+            cpu: 50m
             memory: 50Mi
         env:
           - name: ONEANDONE_INSTANCE_REGION
